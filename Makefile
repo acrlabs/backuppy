@@ -1,4 +1,6 @@
-.PHONY: test venv clean
+.PHONY: test venv clean default
+
+default: venv
 
 test: requirements.txt requirements-dev.txt
 	tox

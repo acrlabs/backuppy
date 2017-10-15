@@ -32,3 +32,4 @@ venv
 *.pyc
 __pycache__
 .coverage
+.cache
