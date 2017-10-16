@@ -1,12 +1,20 @@
+import os
+
 import colorlog
 
 
 class EqualityMixin:
     def __eq__(self, other):
-        return self.__dict__ == other.__dict__
+        return other and self.__dict__ == other.__dict__
 
     def __ne__(self, other):
         return not (self == other)
+
+
+def file_walker(path, on_error=None):
+    for root, dirs, files in os.walk(path, onerror=on_error):
+        for f in files:
+            yield os.path.join(root, f)
 
 
 def get_color_logger(name):
