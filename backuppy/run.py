@@ -3,15 +3,12 @@ import os
 
 import yaml
 
+from backuppy.backup import backup
 from backuppy.manifest import Manifest
 
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument(
-        '--manifest',
-        help='Backup manifest to read',
-    )
     parser.add_argument(
         '--config',
         default='backuppy.conf',
@@ -28,21 +25,6 @@ def parse_args():
     return parser.parse_args()
 
 
-def backup(manifest, location, config):
-    if args.manifest:
-        manifest = Manifest.load(args.manifest)
-    else:
-        manifest = Manifest(config['directories'].keys())
-
-    exclusions = {
-        os.path.abspath(path): pathconf.get('exclusions', [])
-        for path, pathconf in config['directories'].items()
-        if pathconf
-    }
-    manifest.update(exclusions)
-    manifest.save(os.path.join(args.backup_location, 'manifest'))
-
-
 def restore(manifest, location, timestamp):
     pass
 
@@ -51,7 +33,15 @@ def main(args):
     if args.backup_location:
         with open(args.config) as f:
             config = yaml.load(f)
-        backup(args.manifest, args.backup_location, config)
+
+        manifest_file = os.path.join(args.backup_location, 'manifest')
+        if os.path.isfile(manifest_file):
+            manifest = Manifest.load(manifest_file)
+        else:
+            manifest = Manifest()
+
+        backup(manifest, args.backup_location, config)
+        manifest.save(manifest_file)
 
     elif args.restore_location:
         restore(args.restore_location)
