@@ -15,8 +15,7 @@ logger = get_color_logger(__name__)
 class ManifestEntry(yaml.YAMLObject, EqualityMixin):
     yaml_tag = u'!entry'
 
-    def __init__(self, *abs_path):
-        abs_file_name = os.path.join(*abs_path)
+    def __init__(self, abs_file_name):
         file_stat = os.stat(abs_file_name)
         self.sha = compute_hash(abs_file_name)
         self.mtime = int(file_stat.st_mtime)
@@ -34,20 +33,13 @@ class Manifest:
     The manifest stores all of the information in a "contents" dictionary, which
     has the following format:
 
-        /full/path/to/backup_location_1:
-            relative/path/to/file1:
-                - (timestamp1, ManifestEntry)
-                - (timestamp3, ManifestEntry)
-            file2:
-                - (timestamp2, ManifestEntry)
-                ...
+        /full/path/to/file1
+            - (timestamp1, ManifestEntry)
+            - (timestamp3, ManifestEntry)
+        /full/path/to/file2:
+            - (timestamp2, ManifestEntry)
             ...
-
-        /different/path/to/backup_location_2:
-            ...
-
-    The absolute path for any file can be reconstructed by concatenating the
-    top-level index with the file name.
+        ...
 
     The list entries for each file are tuples indicating the time that the file
     was backed up as well as the relevant file metadata.  This list is maintained
@@ -76,40 +68,38 @@ class Manifest:
         with open(location, 'rb') as f:
             return yaml.load(decrypt_and_unpack(f.read()))
 
-    def get_last_entry(self, abs_base_path, rel_name):
+    def get_last_entry(self, abs_file_name):
         try:
-            return self.contents[abs_base_path][rel_name][-1][1]
+            return self.contents[abs_file_name][-1][1]
         except KeyError:
             return None
 
-    def is_current(self, *abs_path):
-        return (self.get_last_entry(*abs_path) == ManifestEntry(*abs_path))
+    def is_current(self, abs_file_name):
+        return (self.get_last_entry(abs_file_name) == ManifestEntry(abs_file_name))
 
-    def insert_or_update(self, entry, abs_base_path, rel_name):
+    def insert_or_update(self, abs_file_name, entry):
         commit_time = int(time.time())
-        self.contents.setdefault(abs_base_path, {}).setdefault(rel_name, []).append([commit_time, entry])
+        self.contents.setdefault(abs_file_name, []).append([commit_time, entry])
 
-    def delete(self, abs_base_path, rel_name):
+    def delete(self, abs_file_name):
         commit_time = int(time.time())
         try:
-            self.contents[abs_base_path][rel_name].append([commit_time, None])
+            self.contents[abs_file_name].append([commit_time, None])
         except KeyError:
-            logger.warn(f'Tried to delete unknown file {rel_name} in {abs_base_path}')
+            logger.warn(f'Tried to delete unknown file {abs_file_name}')
 
-    def tracked_files(self, abs_base_path):
-        return set(self.contents.get(abs_base_path, {}).keys())
+    def tracked_files(self):
+        return set(self.contents.keys())
 
     def snapshot(self, timestamp):
         manifest_snapshot = {}
-        for path, records in self.contents.items():
-            for abs_file_name, entries in records.items():
-                try:
-                    commit_time, entry = max(((ct, e) for ct, e in entries if ct <= timestamp))
-                except ValueError:
-                    logger.info(f'{abs_file_name} has not been created yet')
-                    continue
+        for abs_file_name, entries in self.contents.items():
+            # if the earliest entry is greater than our timestamp, skip it
+            if entries[0][0] > timestamp:
+                continue
+            commit_time, entry = max(((ct, e) for ct, e in entries if ct <= timestamp))
 
-                # Only include the path if the file hasn't been deleted
-                if entry:
-                    manifest_snapshot[abs_file_name] = entry
+            # Only include the path if the file hasn't been deleted
+            if entry:
+                manifest_snapshot[abs_file_name] = entry
         return manifest_snapshot

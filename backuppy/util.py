@@ -17,7 +17,7 @@ def file_walker(path, on_error=None):
     """
     for root, dirs, files in os.walk(path, onerror=on_error):
         for f in files:
-            yield os.path.join(os.path.relpath(root, path), f)
+            yield os.path.join(root, f)
 
 
 def get_color_logger(name):

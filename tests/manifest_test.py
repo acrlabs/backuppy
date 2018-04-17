@@ -1,4 +1,4 @@
-import os
+from copy import deepcopy
 from hashlib import sha256
 
 import mock
@@ -6,226 +6,119 @@ import pytest
 
 from backuppy.manifest import Manifest
 from backuppy.manifest import ManifestEntry
+from tests.conftest import INITIAL_FILES
 
 
 def sha(string):
     return sha256(string.encode()).hexdigest()
 
 
-@pytest.fixture
-def fake_filesystem(fs):
-    fs.CreateFile('/a/dummy/file1', contents='foo')
-    fs.CreateFile('/a/dummy/file2', contents='bar')
-    fs.CreateFile('/b/dummy/file1', contents='baz')
-    fs.CreateFile('/c/not/backed/up', contents='whatever')
+def overwrite_file(name=INITIAL_FILES[0], contents='foo'):
+    with open(name, 'w') as f:
+        f.write(contents)
 
 
 @pytest.fixture
-def mock_manifest(fake_filesystem):
-    return Manifest(['/a', '/b'])
+def manifest(fake_filesystem):
+    m = Manifest()
+    m.contents = {name: [[0, ManifestEntry(name)]] for name in INITIAL_FILES}
+    return m
 
 
-def test_manifest_init(mock_manifest):
-    assert set(mock_manifest.contents.keys()) == set(['/a', '/b'])
-
-
-def test_manifest_update(mock_manifest, fs):
-    mock_manifest.update()
-
-    assert len(mock_manifest.contents['/a']) == 2
-    assert len(mock_manifest.contents['/b']) == 1
-    assert '/c' not in mock_manifest.contents
-    assert '/a/dummy/file1' in mock_manifest.contents['/a']
-    assert '/a/dummy/file2' in mock_manifest.contents['/a']
-    assert '/b/dummy/file1' in mock_manifest.contents['/b']
-    assert len(mock_manifest.contents['/a']['/a/dummy/file1']) == 1
-    assert len(mock_manifest.contents['/a']['/a/dummy/file2']) == 1
-    assert len(mock_manifest.contents['/b']['/b/dummy/file1']) == 1
-    assert mock_manifest.contents['/a']['/a/dummy/file1'][0][1].sha == sha('foo')
-    assert mock_manifest.contents['/a']['/a/dummy/file2'][0][1].sha == sha('bar')
-    assert mock_manifest.contents['/b']['/b/dummy/file1'][0][1].sha == sha('baz')
-
-    new_file = fs.CreateFile('/a/new/file', contents='hello, world!')
-    mock_manifest.update()
-
-    assert len(mock_manifest.contents['/a']) == 3
-    assert len(mock_manifest.contents['/b']) == 1
-    assert '/a/dummy/file1' in mock_manifest.contents['/a']
-    assert '/a/dummy/file2' in mock_manifest.contents['/a']
-    assert '/a/new/file' in mock_manifest.contents['/a']
-    assert '/b/dummy/file1' in mock_manifest.contents['/b']
-    assert len(mock_manifest.contents['/a']['/a/dummy/file1']) == 1
-    assert len(mock_manifest.contents['/a']['/a/dummy/file2']) == 1
-    assert len(mock_manifest.contents['/a']['/a/new/file']) == 1
-    assert len(mock_manifest.contents['/b']['/b/dummy/file1']) == 1
-    assert mock_manifest.contents['/a']['/a/new/file'][0][1].sha == sha('hello, world!')
-
-    new_file.SetContents('hello, everyone!')
-    mock_manifest.update()
-
-    assert len(mock_manifest.contents['/a']) == 3
-    assert len(mock_manifest.contents['/b']) == 1
-    assert '/a/dummy/file1' in mock_manifest.contents['/a']
-    assert '/a/dummy/file2' in mock_manifest.contents['/a']
-    assert '/a/new/file' in mock_manifest.contents['/a']
-    assert '/b/dummy/file1' in mock_manifest.contents['/b']
-    assert len(mock_manifest.contents['/a']['/a/dummy/file1']) == 1
-    assert len(mock_manifest.contents['/a']['/a/dummy/file2']) == 1
-    assert len(mock_manifest.contents['/a']['/a/new/file']) == 2
-    assert len(mock_manifest.contents['/b']['/b/dummy/file1']) == 1
-    assert mock_manifest.contents['/a']['/a/new/file'][0][1].sha == sha('hello, world!')
-    assert mock_manifest.contents['/a']['/a/new/file'][1][1].sha == sha('hello, everyone!')
-
-    os.chown('/a/new/file', 1000, 1001)
-    mock_manifest.update()
-
-    assert len(mock_manifest.contents['/a']) == 3
-    assert len(mock_manifest.contents['/b']) == 1
-    assert '/a/dummy/file1' in mock_manifest.contents['/a']
-    assert '/a/dummy/file2' in mock_manifest.contents['/a']
-    assert '/a/new/file' in mock_manifest.contents['/a']
-    assert '/b/dummy/file1' in mock_manifest.contents['/b']
-    assert len(mock_manifest.contents['/a']['/a/dummy/file1']) == 1
-    assert len(mock_manifest.contents['/a']['/a/dummy/file2']) == 1
-    assert len(mock_manifest.contents['/a']['/a/new/file']) == 3
-    assert len(mock_manifest.contents['/b']['/b/dummy/file1']) == 1
-    assert mock_manifest.contents['/a']['/a/new/file'][0][1].sha == sha('hello, world!')
-    assert mock_manifest.contents['/a']['/a/new/file'][1][1].sha == sha('hello, everyone!')
-    assert mock_manifest.contents['/a']['/a/new/file'][2][1].sha == sha('hello, everyone!')
-    assert mock_manifest.contents['/a']['/a/new/file'][2][1].uid == 1000
-    assert mock_manifest.contents['/a']['/a/new/file'][2][1].gid == 1001
-
-    os.remove('/a/dummy/file1')
-    mock_manifest.update()
-
-    assert len(mock_manifest.contents['/a']) == 3
-    assert len(mock_manifest.contents['/b']) == 1
-    assert '/a/dummy/file1' in mock_manifest.contents['/a']
-    assert '/a/dummy/file2' in mock_manifest.contents['/a']
-    assert '/a/new/file' in mock_manifest.contents['/a']
-    assert '/b/dummy/file1' in mock_manifest.contents['/b']
-    assert len(mock_manifest.contents['/a']['/a/dummy/file1']) == 2
-    assert len(mock_manifest.contents['/a']['/a/dummy/file2']) == 1
-    assert len(mock_manifest.contents['/a']['/a/new/file']) == 3
-    assert len(mock_manifest.contents['/b']['/b/dummy/file1']) == 1
-    assert mock_manifest.contents['/a']['/a/dummy/file1'][0][1].sha == sha('foo')
-    assert mock_manifest.contents['/a']['/a/dummy/file1'][1][1] is None
-
-    fs.CreateFile('/a/dummy/file1', contents='recreated')
-    mock_manifest.update()
-
-    assert len(mock_manifest.contents['/a']) == 3
-    assert len(mock_manifest.contents['/b']) == 1
-    assert '/a/dummy/file1' in mock_manifest.contents['/a']
-    assert '/a/dummy/file2' in mock_manifest.contents['/a']
-    assert '/a/new/file' in mock_manifest.contents['/a']
-    assert '/b/dummy/file1' in mock_manifest.contents['/b']
-    assert len(mock_manifest.contents['/a']['/a/dummy/file1']) == 3
-    assert len(mock_manifest.contents['/a']['/a/dummy/file2']) == 1
-    assert len(mock_manifest.contents['/a']['/a/new/file']) == 3
-    assert len(mock_manifest.contents['/b']['/b/dummy/file1']) == 1
-    assert mock_manifest.contents['/a']['/a/dummy/file1'][0][1].sha == sha('foo')
-    assert mock_manifest.contents['/a']['/a/dummy/file1'][1][1] is None
-    assert mock_manifest.contents['/a']['/a/dummy/file1'][2][1].sha == sha('recreated')
-
-
-def test_manifest_save_load(mock_manifest):
-    mock_manifest.save('/manifest')
+def test_manifest_save_load(manifest):
+    manifest.save('/manifest')
     m = Manifest.load('/manifest')
-    assert m.contents == mock_manifest.contents
+    assert m.contents == manifest.contents
 
 
-@mock.patch('backuppy.manifest.logger')
-def test_manifest_invalid_entry(mock_logger, mock_manifest):
-    os.chmod('/a/dummy/file1', 0)
-    mock_manifest.update()
+def test_last_entry(manifest):
+    for name in INITIAL_FILES:
+        assert manifest.get_last_entry(name) == ManifestEntry(name)
 
-    assert mock_logger.warn.call_count == 1
-    assert len(mock_manifest.contents['/a']) == 1
-    assert len(mock_manifest.contents['/b']) == 1
-    assert '/a/dummy/file2' in mock_manifest.contents['/a']
-    assert '/b/dummy/file1' in mock_manifest.contents['/b']
-    assert len(mock_manifest.contents['/a']['/a/dummy/file2']) == 1
-    assert len(mock_manifest.contents['/b']['/b/dummy/file1']) == 1
-    assert mock_manifest.contents['/a']['/a/dummy/file2'][0][1].sha == sha('bar')
-    assert mock_manifest.contents['/b']['/b/dummy/file1'][0][1].sha == sha('baz')
+    overwrite_file()
+    new_entry = ManifestEntry(INITIAL_FILES[0])
+    manifest.contents[INITIAL_FILES[0]].append([1, new_entry])
+    assert manifest.get_last_entry(INITIAL_FILES[0]) == new_entry
 
 
-def test_manifest_with_exclusions(mock_manifest):
-    mock_manifest.update({'/a': ['file']})
-    assert len(mock_manifest.contents['/a']) == 0
-    assert len(mock_manifest.contents['/b']) == 1
-    assert '/b/dummy/file1' in mock_manifest.contents['/b']
-    assert len(mock_manifest.contents['/b']['/b/dummy/file1']) == 1
-    assert mock_manifest.contents['/b']['/b/dummy/file1'][0][1].sha == sha('baz')
+def test_last_entry_not_present(manifest):
+    assert manifest.get_last_entry('/file/not/present') is None
 
-    mock_manifest.update({'/b': ['.*']})
-    assert len(mock_manifest.contents['/a']) == 2
-    assert len(mock_manifest.contents['/b']) == 1
-    assert '/a/dummy/file1' in mock_manifest.contents['/a']
-    assert '/a/dummy/file2' in mock_manifest.contents['/a']
-    assert '/b/dummy/file1' in mock_manifest.contents['/b']
-    assert len(mock_manifest.contents['/a']['/a/dummy/file1']) == 1
-    assert len(mock_manifest.contents['/a']['/a/dummy/file2']) == 1
-    assert len(mock_manifest.contents['/b']['/b/dummy/file1']) == 2
-    assert mock_manifest.contents['/b']['/b/dummy/file1'][0][1].sha == sha('baz')
-    assert mock_manifest.contents['/b']['/b/dummy/file1'][1][1] is None
+
+def test_is_current(manifest):
+    for name in INITIAL_FILES:
+        assert manifest.is_current(name)
+    overwrite_file()
+    assert not manifest.is_current(INITIAL_FILES[0])
+
+
+def test_is_current_not_present(manifest):
+    assert not manifest.is_current('/c/not/backed/up')
 
 
 @mock.patch('backuppy.manifest.time')
-def test_manifest_snapshot(mock_time, mock_manifest, fs):
-    mock_time.time.side_effect = [1, 10, 50, 60, 100]
+class TestInsertUpdateDelete:
+    def test_insert(self, mock_time, manifest):
+        mock_time.return_value = 1
+        new_file = '/c/not/backed/up'
+        new_entry = ManifestEntry(new_file)
+        manifest.insert_or_update(new_file, new_entry)
+        assert set(manifest.contents.keys()) == set(INITIAL_FILES + [new_file])
+        assert manifest.contents[new_file] == [[1, new_entry]]
+        for entries in manifest.contents.values():
+            assert len(entries) == 1
 
-    adummyfile1 = ManifestEntry('/a/dummy/file1')
-    adummyfile2 = ManifestEntry('/a/dummy/file2')
-    bdummyfile1 = ManifestEntry('/b/dummy/file1')
-    mock_manifest.update()
+    def test_update(self, mock_time, manifest):
+        mock_time.return_value = 1
+        overwrite_file()
+        new_entry = ManifestEntry(INITIAL_FILES[0])
+        manifest.insert_or_update(INITIAL_FILES[0], new_entry)
+        assert set(manifest.contents.keys()) == set(INITIAL_FILES)
+        assert manifest.contents[INITIAL_FILES[0]][-1] == [1, new_entry]
+        assert len(manifest.contents[INITIAL_FILES[0]]) == 2
+        assert len(manifest.contents[INITIAL_FILES[1]]) == 1
+        assert len(manifest.contents[INITIAL_FILES[2]]) == 1
 
-    f = fs.GetObject('/a/dummy/file1')
-    f.SetContents('lorem ipsum')
+    def test_delete(self, mock_time, manifest):
+        manifest.delete(INITIAL_FILES[0])
+        assert set(manifest.contents.keys()) == set(INITIAL_FILES)
+        assert manifest.contents[INITIAL_FILES[0]][-1] == [1, None]
+        assert len(manifest.contents[INITIAL_FILES[0]]) == 2
+        assert len(manifest.contents[INITIAL_FILES[1]]) == 1
+        assert len(manifest.contents[INITIAL_FILES[2]]) == 1
 
-    adummyfile1changed = ManifestEntry('/a/dummy/file1')
-    mock_manifest.update()
+    def test_delete_unknown(self, mock_time, manifest):
+        old_contents = deepcopy(manifest.contents)
+        with mock.patch('backuppy.manifest.logger') as mock_logger:
+            manifest.delete('foo')
+            assert mock_logger.warn.call_count == 1
+            assert manifest.contents == old_contents
 
-    f = fs.GetObject('/b/dummy/file1')
-    f.SetContents('hello, world!')
-    fs.CreateFile('/a/new/file', contents='i am a new file')
 
-    bdummyfile1changed = ManifestEntry('/b/dummy/file1')
-    anewfile = ManifestEntry('/a/new/file')
-    mock_manifest.update()
+def test_tracked_files(manifest):
+    assert manifest.tracked_files() == set(INITIAL_FILES)
 
-    os.remove('/a/dummy/file2')
-    mock_manifest.update()
 
-    fs.CreateFile('/a/dummy/file2', contents='bar')
-    mock_manifest.update()
+def test_manifest_snapshot(manifest):
+    overwrite_file(INITIAL_FILES[0], 'foo')
+    overwrite_file(INITIAL_FILES[2], 'asdf')
+    manifest.contents[INITIAL_FILES[0]].append([10, ManifestEntry(INITIAL_FILES[0])])
+    manifest.contents[INITIAL_FILES[1]].append([12, None])
+    manifest.contents[INITIAL_FILES[2]].append([20, ManifestEntry(INITIAL_FILES[2])])
 
-    assert mock_manifest.snapshot(0) == {}
-    assert mock_manifest.snapshot(5) == {
-        '/a/dummy/file1': adummyfile1,
-        '/a/dummy/file2': adummyfile2,
-        '/b/dummy/file1': bdummyfile1,
-    }
-    assert mock_manifest.snapshot(30) == {
-        '/a/dummy/file1': adummyfile1changed,
-        '/a/dummy/file2': adummyfile2,
-        '/b/dummy/file1': bdummyfile1,
-    }
-    assert mock_manifest.snapshot(55) == {
-        '/a/dummy/file1': adummyfile1changed,
-        '/a/dummy/file2': adummyfile2,
-        '/a/new/file': anewfile,
-        '/b/dummy/file1': bdummyfile1changed,
-    }
-    assert mock_manifest.snapshot(75) == {
-        '/a/dummy/file1': adummyfile1changed,
-        '/a/new/file': anewfile,
-        '/b/dummy/file1': bdummyfile1changed,
-    }
-    assert mock_manifest.snapshot(125) == {
-        '/a/dummy/file1': adummyfile1changed,
-        '/a/dummy/file2': adummyfile2,
-        '/a/new/file': anewfile,
-        '/b/dummy/file1': bdummyfile1changed,
-    }
+    zeroth_snapshot = manifest.snapshot(-1)
+    assert not zeroth_snapshot
+
+    first_snapshot = manifest.snapshot(0)
+    assert set(first_snapshot.keys()) == set(INITIAL_FILES)
+    assert {entry.sha for entry in first_snapshot.values()} == {sha(name) for name in INITIAL_FILES}
+
+    second_snapshot = manifest.snapshot(15)
+    assert set(second_snapshot.keys()) == {INITIAL_FILES[0], INITIAL_FILES[2]}
+    assert second_snapshot[INITIAL_FILES[0]].sha == sha('foo')
+    assert second_snapshot[INITIAL_FILES[2]].sha == sha(INITIAL_FILES[2])
+
+    third_snapshot = manifest.snapshot(25)
+    assert set(second_snapshot.keys()) == {INITIAL_FILES[0], INITIAL_FILES[2]}
+    assert third_snapshot[INITIAL_FILES[0]].sha == sha('foo')
+    assert third_snapshot[INITIAL_FILES[2]].sha == sha('asdf')
