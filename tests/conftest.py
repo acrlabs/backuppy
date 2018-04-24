@@ -1,6 +1,6 @@
 import pytest
 
-INITIAL_FILES = ['/a/dummy/file1', '/a/dummy/file2', '/b/dummy/file1']
+INITIAL_FILES = ['/a/dummy/file1', '/a/dummy/file2', '/b/file1']
 
 
 @pytest.fixture(autouse=True)

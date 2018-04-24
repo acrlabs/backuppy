@@ -8,3 +8,7 @@ class BackupFailedError(BackuppyException):
 
 class DiffParseError(BackuppyException):
     pass
+
+
+class UnknownProtocolError(BackuppyException):
+    pass

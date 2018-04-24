@@ -1,12 +1,11 @@
 import os
 import time
+from hashlib import sha256
 
 import yaml
 
-from backuppy.crypto import compress_and_encrypt
-from backuppy.crypto import compute_hash
-from backuppy.crypto import decrypt_and_unpack
 from backuppy.util import EqualityMixin
+from backuppy.util import file_contents_stream
 from backuppy.util import get_color_logger
 
 logger = get_color_logger(__name__)
@@ -15,9 +14,14 @@ logger = get_color_logger(__name__)
 class ManifestEntry(yaml.YAMLObject, EqualityMixin):
     yaml_tag = u'!entry'
 
-    def __init__(self, abs_file_name):
+    def __init__(self, abs_file_name, sha=None):
         file_stat = os.stat(abs_file_name)
-        self.sha = compute_hash(abs_file_name)
+        self.sha = sha
+        if not self.sha:
+            hash_function = sha256()
+            for chunk in file_contents_stream(abs_file_name):
+                hash_function.update(chunk)
+            self.sha = hash_function.hexdigest()
         self.mtime = int(file_stat.st_mtime)
         self.uid = file_stat.st_uid
         self.gid = file_stat.st_gid
@@ -55,18 +59,8 @@ class Manifest:
         """ Create an empty manifest; we only do this if we're starting a new backup """
         self.contents = {}
 
-    def save(self, location):
-        """ Write the manifest to an encrypted YAML file """
-        with open(location, 'wb') as f:
-            f.write(compress_and_encrypt(yaml.dump(self)))
-
-    @staticmethod
-    def load(location):
-        """ Read the manifest from an encrypted YAML file; PyYAML records the Python class that
-        we're writing here, so when we call "load" it will return a Manifest object.
-        """
-        with open(location, 'rb') as f:
-            return yaml.load(decrypt_and_unpack(f.read()))
+    def stream(self):
+        return [yaml.dump(self).encode()]
 
     def get_last_entry(self, abs_file_name):
         try:

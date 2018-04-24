@@ -1,6 +1,9 @@
 import os
+import re
 
 import colorlog
+
+CHUNK_SIZE = 2
 
 
 class EqualityMixin:
@@ -9,6 +12,10 @@ class EqualityMixin:
 
     def __ne__(self, other):
         return not (self == other)
+
+
+def compile_exclusions(exclusions):
+    return [re.compile(excl) for excl in exclusions]
 
 
 def file_walker(path, on_error=None):
@@ -26,3 +33,12 @@ def get_color_logger(name):
     logger = colorlog.getLogger(name)
     logger.addHandler(handler)
     return logger
+
+
+def file_contents_stream(abs_file_name):
+    with open(abs_file_name, 'rb') as f:
+        while True:
+            chunk = f.read(CHUNK_SIZE)
+            if not chunk:
+                break
+            yield chunk
