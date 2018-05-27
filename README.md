@@ -3,7 +3,7 @@
 
 ## Robustness Under Failure
 
-The software should gracefully shut down whenever it can; however, we want to make sure that even in the event 
+The software should gracefully shut down whenever it can; however, we want to make sure that even in the event
 of a non-graceful shutdown that data corruption or loss don't occur.  This section outlines the failure modes
 we've considered and how Backuppy will respond:
 

@@ -25,12 +25,6 @@ def manifest(fake_filesystem):
     return m
 
 
-def test_manifest_save_load(manifest):
-    manifest.save('/manifest')
-    m = Manifest.load('/manifest')
-    assert m.contents == manifest.contents
-
-
 def test_last_entry(manifest):
     for name in INITIAL_FILES:
         assert manifest.get_last_entry(name) == ManifestEntry(name)

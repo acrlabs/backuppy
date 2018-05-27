@@ -1,7 +1,7 @@
 import staticconf
 
-from backuppy.stores.local_backup_store import LocalBackupStore
 from backuppy.exceptions import UnknownProtocolError
+from backuppy.stores.local_backup_store import LocalBackupStore
 
 
 __all__ = [

@@ -29,25 +29,25 @@ def apply_diff(diff, old_contents):
         contents_pos = int(diff[pos:sep_ind])
 
         pos = sep_ind + 1
-        action = diff[pos:pos+1]
+        action = diff[pos:pos + 1]
 
         pos += 1
         sep_ind = _find_sep_index(diff, pos)
         contents_len = int(diff[pos:sep_ind])
 
         pos = sep_ind + 1
-        contents = diff[pos:pos+contents_len]
+        contents = diff[pos:pos + contents_len]
         pos += contents_len + 1
 
         if action == DEL:
             pos -= contents_len
-            del new_contents[contents_pos:contents_pos+contents_len]
+            del new_contents[contents_pos:contents_pos + contents_len]
         elif len(contents) != contents_len:
             raise DiffParseError(f'Contents length did not match expected ({len(contents)} != {contents_len})')
         elif action == INS:
             new_contents[contents_pos:contents_pos] = contents
         elif action == REPL:
-            new_contents[contents_pos:contents_pos+contents_len] = contents
+            new_contents[contents_pos:contents_pos + contents_len] = contents
         else:
             raise DiffParseError(f'Expected an action, found {chr(action[0])}')
 
@@ -66,7 +66,7 @@ def compute_diff(old_contents, new_contents):
         if case == '=':
             continue
 
-        contents = new_contents[pos-num:pos]
+        contents = new_contents[pos - num:pos]
         diff += f'@{pos-num}'.encode('utf-8') + SEP
         if case == 'D':
             diff += DEL
