@@ -1,98 +1,105 @@
 import os
-from hashlib import sha256
-from tempfile import NamedTemporaryFile
+from tempfile import TemporaryFile
 
 import staticconf
-import yaml
 
-from backuppy.crypto import compress_and_encrypt
-from backuppy.crypto import decrypt_and_unpack
-from backuppy.manifest import Manifest
+from backuppy.blob import compute_diff
+from backuppy.io import ReadSha
 from backuppy.manifest import ManifestEntry
+from backuppy.stores.backup_store import MANIFEST_PATH
 from backuppy.util import compile_exclusions
-from backuppy.util import file_contents_stream
 from backuppy.util import file_walker
 from backuppy.util import get_color_logger
+from backuppy.util import sha_to_path
 
 logger = get_color_logger(__name__)
-MANIFEST_PATH = 'manifest'
 
 
-def _get_manifest(backup_store):
-    try:
-        with open(backup_store.read(MANIFEST_PATH), 'rb') as f:
-            return yaml.load(decrypt_and_unpack(f.read()))
-    except FileNotFoundError:
-        return Manifest()
+def _scan_directory(abs_base_path, manifest, exclusions):
+    modified_files, marked_files = set(), set()
+    for abs_file_name in file_walker(abs_base_path, logger.warning):
+
+        # Skip files that match any of the specified regular expressions
+        matched_patterns = [pattern for pattern in exclusions if pattern.search(abs_file_name)]
+        if matched_patterns:
+            logger.info(f'{abs_file_name} matched exclusion pattern(s) "{matched_patterns}"; skipping')
+            continue
+
+        # Mark the file as "seen" so it isn't deleted later
+        marked_files.add(abs_file_name)
+
+        if manifest.is_current(abs_file_name):
+            logger.info(f'{abs_file_name} is up-to-date; skipping')
+            continue
+
+        modified_files.add(abs_file_name)
+    return modified_files, marked_files
 
 
-def _backup_data_stream(data_stream, backup_store, stored_path=None):
-    tmpfile = None
+def _save_copy(abs_file_name, backup_store):
+    read_sha = ReadSha(abs_file_name)
+    with read_sha as fd_orig, TemporaryFile() as fd_copy:
+        while True:
+            data = fd_orig.read()
+            if not data:
+                break
+            fd_copy.write(data)
+        fd_copy.seek(0)
+        backup_store.save(sha_to_path(read_sha.hexdigest), fd_copy)
+    entry = ManifestEntry(abs_file_name, read_sha.hexdigest)
+    backup_store.manifest.insert_or_update(abs_file_name, entry, is_diff=False)
 
-    try:
-        hash_function = sha256()
-        with NamedTemporaryFile(suffix='.tbkpy', delete=False) as f:
-            tmpfile = f.name
-            for chunk in data_stream:
-                hash_function.update(chunk)
-                f.write(compress_and_encrypt(chunk))
-        sha = hash_function.hexdigest()
-        stored_path = stored_path or (sha[:2], sha[2:4], sha[4:])
-        backup_store.write(stored_path, tmpfile)
 
-    finally:
-        if os.path.isfile(tmpfile):
-            os.remove(tmpfile)
+def _save_diff(abs_file_name, base, latest, backup_store):
+    read_sha = ReadSha(abs_file_name)
 
-    return sha
+    with TemporaryFile() as fd_orig, read_sha as fd_new, TemporaryFile() as fd_new_diff:
+        backup_store.load(sha_to_path(base.sha), fd_orig)
+        compute_diff(fd_orig, fd_new, fd_new_diff)
+        if read_sha.hexdigest != latest.sha:
+            backup_store.save(sha_to_path(read_sha.hexdigest), fd_new_diff)
+    entry = ManifestEntry(abs_file_name, read_sha.hexdigest)
+    backup_store.manifest.insert_or_update(
+        abs_file_name,
+        entry,
+        is_diff=(entry.sha != latest.sha or base.sha != latest.sha),
+    )
 
 
 def backup(backup_name, backup_store, global_exclusions=None):
     global_exclusions = global_exclusions or []
-    manifest = _get_manifest(backup_store)
+    modified_files, marked_files = set(), set()
     manifest_changed = False
-    marked_files, error_files, manifest_files = set(), set(), manifest.tracked_files()
 
     for base_path in staticconf.read_list('directories', namespace=backup_name):
         abs_base_path = os.path.abspath(base_path)
         local_exclusions = compile_exclusions(staticconf.read_list('exclusions', [], namespace=backup_name))
         exclusions = global_exclusions + local_exclusions
 
-        for abs_file_name in file_walker(abs_base_path, logger.warning):
+        modified, marked = _scan_directory(abs_base_path, backup_store.manifest, exclusions)
+        modified_files |= (modified)
+        marked_files |= (marked)
 
-            # Skip files that match any of the specified regular expressions
-            matched_patterns = [pattern for pattern in exclusions if pattern.search(abs_file_name)]
-            if matched_patterns:
-                logger.info(f'{abs_file_name} matched exclusion pattern(s) "{matched_patterns}"; skipping')
-                continue
-
-            # Mark the file as "seen" so it isn't deleted later
-            marked_files.add(abs_file_name)
-
-            if manifest.is_current(abs_file_name):
-                logger.info(f'{abs_file_name} is up-to-date; skipping')
-                continue
-
-            try:
-                sha = _backup_data_stream(file_contents_stream(abs_file_name), backup_store)
-            except Exception as e:
-                error_files.add(abs_file_name)
-                logger.exception(f'There was a problem backing up {abs_file_name}: {str(e)}; skipping')
-                continue
-
-            manifest.insert_or_update(abs_file_name, ManifestEntry(abs_file_name, sha))
-            manifest_changed = True
+    for abs_file_name in modified_files:
+        try:
+            base, latest = backup_store.manifest.get_diff_pair(abs_file_name)
+            if not latest:
+                _save_copy(abs_file_name, backup_store)
+            else:
+                _save_diff(abs_file_name, base, latest, backup_store)
             logger.info(f'Backed up {abs_file_name}')
+        except Exception:
+            logger.exception(f'There was a problem backing up {abs_file_name}: skipping')
+            continue
+        manifest_changed = True
 
     # Mark all files that weren't touched in the above loop as "deleted"
     # (we don't actually delete the file, just record that it's no longer present)
-    for name in manifest_files - marked_files:
+    for abs_file_name in backup_store.manifest.files() - marked_files:
         logger.info(f'{abs_file_name} has been deleted')
-        manifest.delete(name)
+        backup_store.manifest.delete(abs_file_name)
+        manifest_changed = True
 
     if manifest_changed:
-        _backup_data_stream(manifest.stream(), backup_store, stored_path=MANIFEST_PATH)
+        backup_store.save(MANIFEST_PATH, backup_store.manifest.stream())
         logger.info('Manifest saved')
-
-    for f in error_files:
-        logger.warning(f'{f} was not backed up; see log for details')

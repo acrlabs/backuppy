@@ -30,6 +30,7 @@ gmon.out
 venv
 *.egg-info
 *.pyc
+.pytest_cache
 __pycache__
 .coverage
 .cache

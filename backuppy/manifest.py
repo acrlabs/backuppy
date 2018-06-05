@@ -1,11 +1,12 @@
+import io
 import os
 import time
-from hashlib import sha256
 
 import yaml
 
+from backuppy.io import BLOCK_SIZE
+from backuppy.io import ReadSha
 from backuppy.util import EqualityMixin
-from backuppy.util import file_contents_stream
 from backuppy.util import get_color_logger
 
 logger = get_color_logger(__name__)
@@ -18,10 +19,11 @@ class ManifestEntry(yaml.YAMLObject, EqualityMixin):
         file_stat = os.stat(abs_file_name)
         self.sha = sha
         if not self.sha:
-            hash_function = sha256()
-            for chunk in file_contents_stream(abs_file_name):
-                hash_function.update(chunk)
-            self.sha = hash_function.hexdigest()
+            read_sha = ReadSha(abs_file_name)
+            with read_sha as f:
+                while f.read(BLOCK_SIZE):
+                    continue
+            self.sha = read_sha.hexdigest
         self.mtime = int(file_stat.st_mtime)
         self.uid = file_stat.st_uid
         self.gid = file_stat.st_gid
@@ -60,30 +62,43 @@ class Manifest:
         self.contents = {}
 
     def stream(self):
-        return [yaml.dump(self).encode()]
+        return io.BytesIO(yaml.dump(self).encode())
 
-    def get_last_entry(self, abs_file_name):
+    def get_diff_pair(self, abs_file_name):
         try:
-            return self.contents[abs_file_name][-1][1]
+            history = self.contents[abs_file_name]
         except KeyError:
-            return None
+            return None, None
+
+        if abs_file_name == '/home/drmorr/tmp/bar':
+            pass
+        try:
+            base_index = max(i for i, (commit_time, entry, is_diff) in enumerate(history) if entry and not is_diff)
+        except ValueError:
+            base_index = 0
+
+        base = history[base_index][1]
+        latest = history[-1][1]
+
+        return base, latest
 
     def is_current(self, abs_file_name):
-        return (self.get_last_entry(abs_file_name) == ManifestEntry(abs_file_name))
+        _, latest_entry = self.get_diff_pair(abs_file_name)
+        return (latest_entry == ManifestEntry(abs_file_name))
 
-    def insert_or_update(self, abs_file_name, entry):
+    def insert_or_update(self, abs_file_name, entry, is_diff):
         commit_time = int(time.time())
-        self.contents.setdefault(abs_file_name, []).append([commit_time, entry])
+        self.contents.setdefault(abs_file_name, []).append([commit_time, entry, is_diff])
 
     def delete(self, abs_file_name):
         commit_time = int(time.time())
         try:
-            self.contents[abs_file_name].append([commit_time, None])
+            self.contents[abs_file_name].append([commit_time, None, False])
         except KeyError:
             logger.warn(f'Tried to delete unknown file {abs_file_name}')
 
-    def tracked_files(self):
-        return set(self.contents.keys())
+    def files(self):
+        return set(filename for filename, entries in self.contents.items() if entries[-1][1])
 
     def snapshot(self, timestamp):
         manifest_snapshot = {}

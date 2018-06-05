@@ -18,6 +18,15 @@ def compile_exclusions(exclusions):
     return [re.compile(excl) for excl in exclusions]
 
 
+def file_contents_stream(abs_file_name):
+    with open(abs_file_name, 'rb') as f:
+        while True:
+            chunk = f.read(CHUNK_SIZE)
+            if not chunk:
+                break
+            yield chunk
+
+
 def file_walker(path, on_error=None):
     """ Walk through all the files in a path and yield their names one-at-a-time,
     relative to the "path" value passed in.
@@ -35,10 +44,5 @@ def get_color_logger(name):
     return logger
 
 
-def file_contents_stream(abs_file_name):
-    with open(abs_file_name, 'rb') as f:
-        while True:
-            chunk = f.read(CHUNK_SIZE)
-            if not chunk:
-                break
-            yield chunk
+def sha_to_path(sha):
+    return (sha[:2], sha[2:4], sha[4:])

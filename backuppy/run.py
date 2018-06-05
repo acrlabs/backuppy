@@ -1,4 +1,5 @@
 import argparse
+import logging
 
 import staticconf
 
@@ -10,12 +11,32 @@ from backuppy.util import get_color_logger
 logger = get_color_logger(__name__)
 
 
+def setup_logging(level):
+    logging.getLogger().setLevel(level.upper())
+
+
 def parse_args():
     parser = argparse.ArgumentParser()
+    parser.add_argument(
+        '-v', '--log-level',
+        default='warning',
+        choices=['debug', 'info', 'warning', 'error', 'critical'],
+        help='What level to output logging information at',
+    )
     parser.add_argument(
         '--config',
         default='backuppy.conf',
         help='Config file to load specifying what to back up',
+    )
+    parser.add_argument(
+        '--disable-compression',
+        action='store_true',
+        help='Turn off GZIP\'ed backup blobs',
+    )
+    parser.add_argument(
+        '--disable-encryption',
+        action='store_true',
+        help='Turn off encrypted backup blobs',
     )
     parser.add_argument(
         '--mode',
@@ -30,7 +51,13 @@ def restore(manifest, location, timestamp):
     pass
 
 
-def main(args):
+def main():
+    args = parse_args()
+    staticconf.DictConfiguration({
+        'use_encryption': not args.disable_encryption,
+        'use_compression': not args.disable_compression,
+    })
+    setup_logging(args.log_level)
     if args.mode == 'backup':
         staticconf.YamlConfiguration(args.config, flatten=False)
         global_exclusions = compile_exclusions(staticconf.read_list('exclusions', []))
@@ -46,5 +73,4 @@ def main(args):
 
 
 if __name__ == '__main__':
-    args = parse_args()
-    main(args)
+    main()

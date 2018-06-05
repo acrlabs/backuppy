@@ -1,4 +1,5 @@
 coverage
+ipdb
 mock
 pre-commit
 pyfakefs
