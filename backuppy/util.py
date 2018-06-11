@@ -1,9 +1,9 @@
 import os
 import re
+from typing import List
+from typing import Pattern
 
 import colorlog
-
-CHUNK_SIZE = 2
 
 
 class EqualityMixin:
@@ -14,17 +14,8 @@ class EqualityMixin:
         return not (self == other)
 
 
-def compile_exclusions(exclusions):
+def compile_exclusions(exclusions: str) -> List[Pattern]:
     return [re.compile(excl) for excl in exclusions]
-
-
-def file_contents_stream(abs_file_name):
-    with open(abs_file_name, 'rb') as f:
-        while True:
-            chunk = f.read(CHUNK_SIZE)
-            if not chunk:
-                break
-            yield chunk
 
 
 def file_walker(path, on_error=None):

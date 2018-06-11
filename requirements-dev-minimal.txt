@@ -1,6 +1,7 @@
 coverage
 ipdb
 mock
+mypy
 pre-commit
 pyfakefs
 pytest

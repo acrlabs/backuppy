@@ -1,5 +1,7 @@
 import os
 import re
+from typing import IO
+from typing import Optional
 
 import edlib
 
@@ -12,7 +14,15 @@ REPL = b'X'
 SEP = b'|'
 
 
-def _copy(fd_orig, fd_new, to_pos=None, offset=0):
+def _copy(fd_orig: IO[bytes], fd_new: IO[bytes], to_pos: Optional[int] = None, offset: int = 0) -> None:
+    """ copy data from fd_orig to fd_new up to to_pos - offset
+
+    :param fd_orig: an open file descriptor in 'rb' mode
+    :param fd_new: an open file descriptor in 'wb' mode
+    :param to_pos: the seek position in fd_orig to copy to,
+        or None to copy the rest of the file
+    :param offset: how much to offset the copy position by
+    """
     to_pos = to_pos or os.stat(fd_orig.fileno()).st_size
     orig_bytes = b''
     while True:
@@ -26,18 +36,35 @@ def _copy(fd_orig, fd_new, to_pos=None, offset=0):
         fd_new.write(orig_bytes)
 
 
-def apply_diff(fd_orig, fd_diff, fd_new):
+def apply_diff(fd_orig: IO[bytes], fd_diff: IO[bytes], fd_new: IO[bytes]) -> None:
+    """ Given an open original file and a diff, write out the new file
+
+    :param fd_orig: an open file descriptor in 'rb' mode
+    :param fd_diff: an open file descriptor in 'rb' mode
+    :param fd_new: an open file descriptor in 'wb' mode
+    """
+
+    # Make sure we're at the beginning
+    fd_orig.seek(0)
+    fd_diff.seek(0)
+    fd_new.seek(0)
+
+    # The outer loop reads a chunk of data at a time; the inner loop parses
+    # the read chunk one step at a time and applies it
     diff, offset = b'', 0
     while True:
         diff += fd_diff.read(BLOCK_SIZE)
         if not diff:
             break
+
         while diff:
+            # try to parse the next chunk; if we can't, break out of the loop to get more data
             try:
                 position, action_len, remainder = diff.split(SEP, 2)
             except ValueError:
-                pass
+                break
 
+            # Use slices to get bytes objects instead of integers
             if position[0:1] != b'@':
                 raise DiffParseError(f'Expected b\'@\' in {position}')
 
@@ -45,6 +72,9 @@ def apply_diff(fd_orig, fd_diff, fd_new):
             _copy(fd_orig, fd_new, contents_pos, offset)
             action = action_len[0:1]
             contents_len = int(action_len[1:])
+
+            # If the remainder of the chunk doesn't have enough bytes and we need to insert
+            # or replace data, get the next chunk first so we have all the needed data
             if len(remainder) < contents_len and action != DEL:
                 break
             contents = b'' if action == DEL else remainder[:contents_len]
@@ -60,11 +90,24 @@ def apply_diff(fd_orig, fd_diff, fd_new):
             else:
                 raise DiffParseError(f'Expected an action, found {action}')
 
+    # If we get here and there's still data in the original file, it must be equal to
+    # what was in the new file, so just copy any remaining data from the original file to the new file
     _copy(fd_orig, fd_new)
+
+
+def compute_diff(fd_orig: IO[bytes], fd_new: IO[bytes], fd_diff: IO[bytes]) -> None:
+    """ Given an open original file and a new file, compute the diff
+
+    :param fd_orig: an open file descriptor in 'rb' mode
+    :param fd_new: an open file descriptor in 'rb' mode
+    :param fd_diff: an open file descriptor in 'wb' mode
+    """
+
+    # Make sure we're at the beginning
+    fd_orig.seek(0)
     fd_new.seek(0)
+    fd_diff.seek(0)
 
-
-def compute_diff(fd_orig, fd_new, fd_diff):
     pos = 0
     while True:
         orig_bytes, new_bytes = fd_orig.read(BLOCK_SIZE), fd_new.read(BLOCK_SIZE)
@@ -93,4 +136,3 @@ def compute_diff(fd_orig, fd_new, fd_diff):
             diff += f'{num}'.encode('utf-8') + SEP + contents + b'\n'
         fd_diff.write(diff)
         pos += BLOCK_SIZE
-    fd_diff.seek(0)

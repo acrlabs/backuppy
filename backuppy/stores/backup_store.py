@@ -23,7 +23,7 @@ class BackupStore(metaclass=ABCMeta):
         pass
 
     @abstractmethod
-    def load(self, name):
+    def load(self, name, fd_out):
         pass
 
     @property

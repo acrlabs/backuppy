@@ -1,11 +1,16 @@
 import os
 from tempfile import TemporaryFile
+from typing import List
+from typing import Pattern
+from typing import Tuple
 
 import staticconf
 
 from backuppy.blob import compute_diff
 from backuppy.io import ReadSha
+from backuppy.manifest import Manifest
 from backuppy.manifest import ManifestEntry
+from backuppy.stores.backup_store import BackupStore
 from backuppy.stores.backup_store import MANIFEST_PATH
 from backuppy.util import compile_exclusions
 from backuppy.util import file_walker
@@ -15,7 +20,8 @@ from backuppy.util import sha_to_path
 logger = get_color_logger(__name__)
 
 
-def _scan_directory(abs_base_path, manifest, exclusions):
+def _scan_directory(abs_base_path: str, manifest: Manifest, exclusions: List[Pattern]) -> Tuple[set, set]:
+    """ scan a directory looking for changes from the manifest """
     modified_files, marked_files = set(), set()
     for abs_file_name in file_walker(abs_base_path, logger.warning):
 
@@ -36,7 +42,8 @@ def _scan_directory(abs_base_path, manifest, exclusions):
     return modified_files, marked_files
 
 
-def _save_copy(abs_file_name, backup_store):
+def _save_copy(abs_file_name: str, backup_store: BackupStore) -> None:
+    """ write a complete copy of the file to the backup store """
     read_sha = ReadSha(abs_file_name)
     with read_sha as fd_orig, TemporaryFile() as fd_copy:
         while True:
@@ -44,33 +51,51 @@ def _save_copy(abs_file_name, backup_store):
             if not data:
                 break
             fd_copy.write(data)
-        fd_copy.seek(0)
+        fd_copy.seek(0)  # need to reset the head because we'll copy this again
         backup_store.save(sha_to_path(read_sha.hexdigest), fd_copy)
     entry = ManifestEntry(abs_file_name, read_sha.hexdigest)
     backup_store.manifest.insert_or_update(abs_file_name, entry, is_diff=False)
 
 
-def _save_diff(abs_file_name, base, latest, backup_store):
+def _save_diff(abs_file_name: str, base: ManifestEntry, latest: ManifestEntry, backup_store: BackupStore) -> None:
+    """ compute a diff between the new file and the original file, and save the diff to the backup store """
     read_sha = ReadSha(abs_file_name)
 
     with TemporaryFile() as fd_orig, read_sha as fd_new, TemporaryFile() as fd_new_diff:
         backup_store.load(sha_to_path(base.sha), fd_orig)
         compute_diff(fd_orig, fd_new, fd_new_diff)
+
+        # the file could have the same sha but still have changed, for example, if the permissions changed
         if read_sha.hexdigest != latest.sha:
             backup_store.save(sha_to_path(read_sha.hexdigest), fd_new_diff)
     entry = ManifestEntry(abs_file_name, read_sha.hexdigest)
     backup_store.manifest.insert_or_update(
         abs_file_name,
         entry,
+        # this is a "real" diff if either the new sha is different from the most-recently-saved sha, or
+        # if the most-recently-saved sha is different from the original sha
         is_diff=(entry.sha != latest.sha or base.sha != latest.sha),
     )
 
 
-def backup(backup_name, backup_store, global_exclusions=None):
+def backup(backup_name: str, backup_store: BackupStore, global_exclusions: List[Pattern] = None) -> None:
+    """ Back up all files in a backup set to the specified backup store
+
+    :param backup_name: the name of the backup set
+    :param backup_store: a BackupStore object to save the files to
+    :param global_exclusions: a list of re.compile objects to exclude from the backup
+    """
     global_exclusions = global_exclusions or []
-    modified_files, marked_files = set(), set()
+    modified_files: set = set()
+    marked_files: set = set()
     manifest_changed = False
 
+    # First we scan all of the directories listed in the backup set and find those that have changed
+    #
+    # This is "safe" in the following senses:
+    #   - if a file changes after it's already been scanned, it will get picked up "next time"
+    #   - we don't rely on any data from the scan about the files, just whether it's changed or not; thus,
+    #     if a file changes further between when we scan and when we back up, we're guaranteed to get the latest version
     for base_path in staticconf.read_list('directories', namespace=backup_name):
         abs_base_path = os.path.abspath(base_path)
         local_exclusions = compile_exclusions(staticconf.read_list('exclusions', [], namespace=backup_name))
@@ -80,15 +105,18 @@ def backup(backup_name, backup_store, global_exclusions=None):
         modified_files |= (modified)
         marked_files |= (marked)
 
+    # Next, we back up all of the files that we discovered in the step above
     for abs_file_name in modified_files:
         try:
             base, latest = backup_store.manifest.get_diff_pair(abs_file_name)
-            if not latest:
+            if not latest:  # the file hasn't been backed up before, or it's been deleted and re-created
                 _save_copy(abs_file_name, backup_store)
-            else:
+            else:  # the file has been backed up before, but has either changed contents or metadata
                 _save_diff(abs_file_name, base, latest, backup_store)
             logger.info(f'Backed up {abs_file_name}')
         except Exception:
+            # We never want to hard-fail a backup just because one file crashed; we'd rather back up as much
+            # as we can, and log the failures for further investigation
             logger.exception(f'There was a problem backing up {abs_file_name}: skipping')
             continue
         manifest_changed = True

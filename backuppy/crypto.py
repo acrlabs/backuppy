@@ -1,4 +1,5 @@
 import gzip
+from typing import IO
 
 import staticconf
 from cryptography.hazmat.backends import default_backend
@@ -15,7 +16,7 @@ TEMP_AES_KEY = b'\xc8\x7fY\x1e\x963i\xf2cph\xc6\x99\xfdZ\xad4<\xa7\x83\xe5\xf0Z\
 TEMP_IV = b'1234567812341234'
 
 
-def compress_and_encrypt(fd_in, fd_out):
+def compress_and_encrypt(fd_in: IO[bytes], fd_out: IO[bytes]) -> None:
     """ Read data from an open file descriptor, and write the compressed, encrypted data to another file descriptor
 
     :param fd_in: an open plaintext file descriptor in 'rb' mode to read data from
@@ -32,7 +33,7 @@ def compress_and_encrypt(fd_in, fd_out):
         fd_out.write(encrypted_block)
 
 
-def decrypt_and_unpack(fd_in, fd_out):
+def decrypt_and_unpack(fd_in: IO[bytes], fd_out: IO[bytes]) -> None:
     """ Read encrypted, GZIPed data from an open file descriptor, and write the decoded data to another file descriptor
 
     :param fd_in: an open file descriptor in 'rb' mode to read ciphertext from
