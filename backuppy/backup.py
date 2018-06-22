@@ -1,4 +1,5 @@
 import os
+from hashlib import sha256
 from tempfile import TemporaryFile
 from typing import List
 from typing import Pattern
@@ -7,7 +8,7 @@ from typing import Tuple
 import staticconf
 
 from backuppy.blob import compute_diff
-from backuppy.io import ReadSha
+from backuppy.io import IOIter
 from backuppy.manifest import Manifest
 from backuppy.manifest import ManifestEntry
 from backuppy.stores.backup_store import BackupStore
@@ -44,31 +45,26 @@ def _scan_directory(abs_base_path: str, manifest: Manifest, exclusions: List[Pat
 
 def _save_copy(abs_file_name: str, backup_store: BackupStore) -> None:
     """ write a complete copy of the file to the backup store """
-    read_sha = ReadSha(abs_file_name)
-    with read_sha as fd_orig, TemporaryFile() as fd_copy:
-        while True:
-            data = fd_orig.read()
-            if not data:
-                break
+    sha_fn = sha256()
+    with open(abs_file_name, 'rb') as fd_orig, TemporaryFile() as fd_copy:
+        for data in IOIter(fd_orig, side_effects=[sha_fn.update]):
             fd_copy.write(data)
-        fd_copy.seek(0)  # need to reset the head because we'll copy this again
-        backup_store.save(sha_to_path(read_sha.hexdigest), fd_copy)
-    entry = ManifestEntry(abs_file_name, read_sha.hexdigest)
+        backup_store.save(sha_to_path(sha_fn.hexdigest()), fd_copy)
+    entry = ManifestEntry(abs_file_name, sha_fn.hexdigest())
     backup_store.manifest.insert_or_update(abs_file_name, entry, is_diff=False)
 
 
 def _save_diff(abs_file_name: str, base: ManifestEntry, latest: ManifestEntry, backup_store: BackupStore) -> None:
     """ compute a diff between the new file and the original file, and save the diff to the backup store """
-    read_sha = ReadSha(abs_file_name)
 
-    with TemporaryFile() as fd_orig, read_sha as fd_new, TemporaryFile() as fd_new_diff:
+    with TemporaryFile() as fd_orig, open(abs_file_name, 'rb') as fd_new, TemporaryFile() as fd_new_diff:
         backup_store.load(sha_to_path(base.sha), fd_orig)
-        compute_diff(fd_orig, fd_new, fd_new_diff)
+        sha = compute_diff(fd_orig, fd_new, fd_new_diff)
 
         # the file could have the same sha but still have changed, for example, if the permissions changed
-        if read_sha.hexdigest != latest.sha:
-            backup_store.save(sha_to_path(read_sha.hexdigest), fd_new_diff)
-    entry = ManifestEntry(abs_file_name, read_sha.hexdigest)
+        if sha != latest.sha:
+            backup_store.save(sha_to_path(sha), fd_new_diff)
+    entry = ManifestEntry(abs_file_name, sha)
     backup_store.manifest.insert_or_update(
         abs_file_name,
         entry,
@@ -82,8 +78,8 @@ def backup(backup_name: str, backup_store: BackupStore, global_exclusions: List[
     """ Back up all files in a backup set to the specified backup store
 
     :param backup_name: the name of the backup set
-    :param backup_store: a BackupStore object to save the files to
-    :param global_exclusions: a list of re.compile objects to exclude from the backup
+    :param backup_store: where to save the backed-up files
+    :param global_exclusions: files which match any of these patterns are excluded from the backup
     """
     global_exclusions = global_exclusions or []
     modified_files: set = set()
@@ -111,13 +107,13 @@ def backup(backup_name: str, backup_store: BackupStore, global_exclusions: List[
             base, latest = backup_store.manifest.get_diff_pair(abs_file_name)
             if not latest:  # the file hasn't been backed up before, or it's been deleted and re-created
                 _save_copy(abs_file_name, backup_store)
-            else:  # the file has been backed up before, but has either changed contents or metadata
+            elif base and latest:  # the file has been backed up before, but has either changed contents or metadata
                 _save_diff(abs_file_name, base, latest, backup_store)
             logger.info(f'Backed up {abs_file_name}')
-        except Exception:
+        except Exception as e:
             # We never want to hard-fail a backup just because one file crashed; we'd rather back up as much
             # as we can, and log the failures for further investigation
-            logger.exception(f'There was a problem backing up {abs_file_name}: skipping')
+            logger.exception(f'There was a problem backing up {abs_file_name}: {str(e)}; skipping')
             continue
         manifest_changed = True
 

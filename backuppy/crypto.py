@@ -7,46 +7,45 @@ from cryptography.hazmat.primitives.ciphers import Cipher
 from cryptography.hazmat.primitives.ciphers.algorithms import AES
 from cryptography.hazmat.primitives.ciphers.modes import OFB
 
-from backuppy.io import BLOCK_SIZE
+from backuppy.io import IOIter
 
 GZIP_START = b'\x1f\x8b'
 
-# THIS KEY AND NONCE FOR DEBUGGING ONLY; DO NOT USE FOR REAL DATA!!!
-TEMP_AES_KEY = b'\xc8\x7fY\x1e\x963i\xf2cph\xc6\x99\xfdZ\xad4<\xa7\x83\xe5\xf0Z\x8c\xa2\xb2\xfa\xb7\xd8\x15}\xc2'
-TEMP_IV = b'1234567812341234'
+
+def identity(x: bytes) -> bytes:
+    return x
 
 
-def compress_and_encrypt(fd_in: IO[bytes], fd_out: IO[bytes]) -> None:
+def compress_and_encrypt(fd_in: IO[bytes], fd_out: IO[bytes], key: bytes, iv: bytes) -> None:
     """ Read data from an open file descriptor, and write the compressed, encrypted data to another file descriptor
 
     :param fd_in: an open plaintext file descriptor in 'rb' mode to read data from
     :param fd_out: an open file descriptor in 'wb' mode to write compressed ciphertext to
     """
-    cipher = Cipher(AES(TEMP_AES_KEY), OFB(TEMP_IV), backend=default_backend())
-    encryptor = cipher.encryptor()
-    while True:
-        block = fd_in.read(BLOCK_SIZE)
-        if not block:
-            break
-        zipped_block = gzip.compress(block) if staticconf.read_bool('use_compression') else block
-        encrypted_block = encryptor.update(zipped_block) if staticconf.read_bool('use_encryption') else zipped_block
-        fd_out.write(encrypted_block)
+    zip_fn = gzip.compress if staticconf.read_bool('use_compression') else identity
+    encrypt_fn = (
+        Cipher(AES(key), OFB(iv), backend=default_backend()).encryptor().update
+        if staticconf.read_bool('use_encryption')
+        else identity
+    )
+    for block in IOIter(fd_in, chain=[zip_fn, encrypt_fn]):
+        fd_out.write(block)
 
 
-def decrypt_and_unpack(fd_in: IO[bytes], fd_out: IO[bytes]) -> None:
+def decrypt_and_unpack(fd_in: IO[bytes], fd_out: IO[bytes], key: bytes, iv: bytes) -> None:
     """ Read encrypted, GZIPed data from an open file descriptor, and write the decoded data to another file descriptor
 
     :param fd_in: an open file descriptor in 'rb' mode to read ciphertext from
     :param fd_out: an open file descriptor in 'wb' mode to write uncompressed plaintext to
     """
-    cipher = Cipher(AES(TEMP_AES_KEY), OFB(TEMP_IV), backend=default_backend())
-    decryptor = cipher.decryptor()
     decrypted_data = b''
-    while True:
-        block = fd_in.read(BLOCK_SIZE)
-        if not block:
-            break
-        decrypted_data += decryptor.update(block) if staticconf.read_bool('use_encryption') else block
+    decrypt_fn = (
+        Cipher(AES(key), OFB(iv), backend=default_backend()).decryptor().update
+        if staticconf.read_bool('use_encryption')
+        else identity
+    )
+    for decrypted_block in IOIter(fd_in, chain=[decrypt_fn]):
+        decrypted_data += decrypted_block
 
         # gzip.decompress throws an EOFError if we pass in partial data, so here we need to
         # decompress each GZIP'ed member individually; to find a complete member we look for
@@ -59,6 +58,7 @@ def decrypt_and_unpack(fd_in: IO[bytes], fd_out: IO[bytes]) -> None:
                 decrypted_data = decrypted_data[index:]
         else:
             fd_out.write(decrypted_data)
+            decrypted_data = b''
 
     # Decompress and write out the last block
     if decrypted_data:

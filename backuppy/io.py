@@ -1,27 +1,22 @@
-from hashlib import sha256
+from typing import IO
 
 BLOCK_SIZE = 32  # (1 << 16)
 
 
-class ReadSha:
-    def __init__(self, filename):
-        self.filename = filename
-        self._sha = sha256()
-        self._fd = None
+class IOIter:
+    def __init__(self, fd: IO[bytes], chain=None, side_effects=None) -> None:
+        self._fd = fd
+        self._side_effects = side_effects or []
+        self._chain = chain or []
 
-    @property
-    def hexdigest(self):
-        return self._sha.hexdigest()
-
-    def read(self, size=BLOCK_SIZE):
-        data = self._fd.read(size)
-        self._sha.update(data)
-        return data
-
-    def __enter__(self):
-        self._fd = open(self.filename, 'rb')
-        return self
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        self._fd.close()
-        return False
+    def __iter__(self):
+        self._fd.seek(0)
+        while True:
+            data = self._fd.read(BLOCK_SIZE)
+            if not data:
+                break
+            for fn in self._side_effects:
+                fn(data)
+            for fn in self._chain:
+                data = fn(data)
+            yield data

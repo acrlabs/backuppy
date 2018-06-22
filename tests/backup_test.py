@@ -1,162 +1,157 @@
-import os
 import re
+from hashlib import sha256
 
 import mock
 import pytest
 import staticconf.testing
 
-from backuppy.backup import _backup_data_stream
+from backuppy.backup import _save_copy
+from backuppy.backup import _save_diff
+from backuppy.backup import _scan_directory
 from backuppy.backup import backup
-from backuppy.manifest import ManifestEntry
-from tests.conftest import INITIAL_FILES
+from backuppy.manifest import Manifest
+from backuppy.stores.backup_store import MANIFEST_PATH
 
-
-################################################
-# Tests and fixtures for _backup_data_stream() #
-################################################
 
 @pytest.fixture
-def backup_data_stream_patches():
-    with mock.patch('backuppy.backup.sha256') as sha256, \
-            mock.patch('backuppy.backup.NamedTemporaryFile') as NamedTemporaryFile, \
-            mock.patch('backuppy.backup.compress_and_encrypt') as compress_and_encrypt:
-        NamedTemporaryFile.return_value.__enter__.return_value.name = 'tmp12345678.tbkpy'
-        yield sha256, NamedTemporaryFile, compress_and_encrypt
+def mock_open():
+    with mock.patch('builtins.open') as m:
+        yield m.return_value.__enter__.return_value
 
 
-@pytest.mark.parametrize('store_removes_file', [True, False])
-def test_backup_data_stream(backup_data_stream_patches, store_removes_file):
-    sha256, _, _ = backup_data_stream_patches
-    sha256.return_value.hexdigest.return_value = 'abcdef12345678'
-    backup_store = mock.Mock()
-    save_path = ('ab', 'cd', 'ef12345678')
-    if not store_removes_file:
-        with open('tmp12345678.tbkpy', 'w') as f:
-            f.write('data')
-
-    _backup_data_stream(['asdf', 'hjkl'], backup_store)
-
-    assert sha256.return_value.update.call_args_list == [mock.call('asdf'), mock.call('hjkl')]
-    assert backup_store.write.call_args == mock.call(save_path, 'tmp12345678.tbkpy')
-    assert os.path.isfile('tmp12345678.tbkpy') is False
+@pytest.fixture
+def mock_tf():
+    with mock.patch('backuppy.backup.TemporaryFile') as m:
+        yield m.return_value.__enter__.return_value
 
 
-def test_backup_data_stream_error(backup_data_stream_patches):
-    _, NamedTemporaryFile, _ = backup_data_stream_patches
-    NamedTemporaryFile.return_value.__enter__.return_value.write.side_effect = Exception('error')
-    with open('tmp12345678.tbkpy', 'w') as f:
-        f.write('data')
+@mock.patch('backuppy.backup.file_walker')
+def test_scan_directory(file_walker):
+    file_walker.return_value = ['/file1', '/file2', '/file3', '/skip']
+    manifest = mock.MagicMock(spec=Manifest)
+    manifest.is_current = lambda f: f == '/file2'
+
+    modified, marked = _scan_directory('/', manifest, [re.compile('skip')])
+    assert modified == set(['/file1', '/file3'])
+    assert marked == set(['/file1', '/file2', '/file3'])
+
+
+def test_save_copy(mock_open, mock_tf):
+    mock_data = [b'asdfh', b'jklqw', b'ertyu', b'iop']
+    sha_fn = sha256()
+    sha_fn.update(b''.join(mock_data))
     backup_store = mock.Mock()
 
+    with mock.patch('backuppy.backup.ManifestEntry') as mock_entry:
+        mock_open.read.side_effect = mock_data
+        _save_copy('/file', backup_store)
+
+        assert mock_tf.write.call_args_list == [mock.call(s) for s in mock_data]
+        assert mock_entry.call_args == mock.call('/file', sha_fn.hexdigest())
+
+
+def test_save_copy_crash(mock_open, mock_tf):
+    mock_open.read.side_effect = [b'asdfh', b'jklqw', b'ertyu', b'iop']
+    mock_tf.write.side_effect = [None, Exception]
+    backup_store = mock.Mock()
     with pytest.raises(Exception):
-        _backup_data_stream(['asdf', 'hjkl'], backup_store)
+        _save_copy('/file', backup_store)
 
-    assert backup_store.write.call_count == 0
-    assert os.path.isfile('tmp12345678.tbkpy') is False
-
-
-###################################
-# Tests and fixtures for backup() #
-###################################
-
-@pytest.fixture
-def config():
-    with staticconf.testing.PatchConfiguration({
-        'directories': ['/a', '/b'],
-        'location': ['/backup'],
-        'protocol': 'fake'
-    }, namespace='my_backup'):
-        yield
+    assert backup_store.save.call_count == 0
+    assert backup_store.manifest.insert_or_update.call_count == 0
 
 
-@pytest.fixture
-def backup_patches(config):
-    mock_manifest = mock.Mock()
-    mock_manifest.tracked_files.return_value = set()
-    mock_manifest.is_current.return_value = False
-    with mock.patch('backuppy.backup._backup_data_stream') as backup_data_stream, \
-            mock.patch('backuppy.backup.file_contents_stream') as file_contents_stream, \
-            mock.patch('backuppy.backup._get_manifest') as mock_get_manifest, \
-            mock.patch('backuppy.backup.logger') as logger:
-        mock_get_manifest.return_value = mock_manifest
-        yield mock_manifest, backup_data_stream, file_contents_stream, logger
+@pytest.mark.parametrize('base,latest', [('1234', '1234'), ('abcd', '5678')])
+def test_save_diff(mock_open, mock_tf, base, latest):
+    backup_store = mock.Mock()
+    with mock.patch('backuppy.backup.compute_diff') as mock_diff, \
+            mock.patch('backuppy.backup.ManifestEntry') as mock_entry:
+        mock_diff.return_value = '1234'
+        mock_entry.return_value.sha = '1234'
+        _save_diff('/file', mock.Mock(sha=base), mock.Mock(sha=latest), backup_store)
+        assert backup_store.save.call_count == int(latest == '5678')
+        assert backup_store.manifest.insert_or_update.call_args == mock.call(
+            '/file',
+            mock_entry.return_value,
+            is_diff=(latest == '5678'),
+        )
 
 
-def test_all_specified_files(backup_patches):
-    mock_manifest, mock_backup_data_stream, mock_file_contents_stream, mock_logger = backup_patches
-    backup('my_backup', mock.Mock())
+def test_save_diff_crash(mock_open, mock_tf):
+    backup_store = mock.Mock()
+    with mock.patch('backuppy.backup.compute_diff') as mock_diff:
+        mock_diff.side_effect = Exception
+        with pytest.raises(Exception):
+            _save_diff('/file', mock.Mock(), mock.Mock(), backup_store)
 
-    assert mock_backup_data_stream.call_count == 4
-    assert mock_file_contents_stream.call_args_list == [mock.call(name) for name in INITIAL_FILES]
-    assert mock_manifest.insert_or_update.call_args_list == [
-        mock.call(name, ManifestEntry(name, mock_backup_data_stream.return_value)) for name in INITIAL_FILES
-    ]
-    assert mock_logger.info.call_count == 4
-    assert mock_logger.exception.call_count == 0
-    assert mock_manifest.delete.call_count == 0
+    assert backup_store.save.call_count == 0
+    assert backup_store.manifest.insert_or_update.call_count == 0
 
 
-def test_with_local_exclusions(backup_patches):
-    mock_manifest, mock_backup_data_stream, mock_file_contents_stream, mock_logger = backup_patches
-    with staticconf.testing.PatchConfiguration({'exclusions': ['dummy']}, namespace='my_backup'):
-        backup('my_backup', mock.Mock())
+def test_backup():
+    backup_store = mock.Mock()
+    backup_store.manifest.files.return_value = set(['/foo/file1', '/foo/file2', '/foo/file3', '/bar/file3'])
+    with staticconf.testing.PatchConfiguration({'directories': ['/foo', '/bar']}, namespace='test_backup'), \
+            mock.patch('backuppy.backup.compile_exclusions') as mock_compile, \
+            mock.patch('backuppy.backup._scan_directory') as mock_scan, \
+            mock.patch('backuppy.backup._save_copy') as mock_save_copy, \
+            mock.patch('backuppy.backup._save_diff') as mock_save_diff, \
+            mock.patch('backuppy.backup.logger') as mock_logger:
+        mock_compile.return_value = []
+        mock_scan.side_effect = [
+            (set(['/foo/file1']), set(['/foo/file1', '/foo/file2', '/foo/file3'])),
+            (set(['/bar/file1', '/bar/file2']), set(['/bar/file1', '/bar/file2'])),
+        ]
+        backup_store.manifest.get_diff_pair.side_effect = [
+            ValueError('something bad happened'),
+            (mock.Mock(), mock.Mock()),
+            (None, None),
+        ]
 
-    assert mock_backup_data_stream.call_count == 2
-    assert mock_manifest.insert_or_update.call_args_list == [
-        mock.call(INITIAL_FILES[2], ManifestEntry(INITIAL_FILES[2], mock_backup_data_stream.return_value))
-    ]
-    assert mock_logger.info.call_count == 4
-    assert mock_logger.exception.call_count == 0
-    assert mock_manifest.delete.call_count == 0
+        backup('test_backup', backup_store)
 
-
-def test_with_global_exclusions(backup_patches):
-    mock_manifest, mock_backup_data_stream, mock_file_contents_stream, mock_logger = backup_patches
-    backup('my_backup', mock.Mock(), [re.compile('file')])
-
-    assert mock_backup_data_stream.call_count == 0
-    assert mock_manifest.insert_or_update.call_count == 0
-    assert mock_logger.info.call_count == 3
-    assert mock_logger.exception.call_count == 0
-    assert mock_manifest.delete.call_count == 0
-
-
-def test_deleted_file(backup_patches):
-    mock_manifest, mock_backup_data_stream, mock_file_contents_stream, mock_logger = backup_patches
-    mock_manifest.tracked_files.return_value = set(INITIAL_FILES + ['/some/other/file'])
-    backup('my_backup', mock.Mock())
-
-    assert mock_backup_data_stream.call_count == 4
-    assert mock_manifest.insert_or_update.call_args_list == [
-        mock.call(name, ManifestEntry(name, mock_backup_data_stream.return_value)) for name in INITIAL_FILES
-    ]
-    assert mock_logger.info.call_count == 5
-    assert mock_logger.exception.call_count == 0
-    assert mock_manifest.delete.call_args_list == [mock.call('/some/other/file')]
-
-
-def test_backup_failed(backup_patches):
-    mock_manifest, mock_backup_data_stream, mock_file_contents_stream, mock_logger = backup_patches
-    mock_manifest.tracked_files.return_value = set(INITIAL_FILES)
-    mock_backup_data_stream.side_effect = OSError
-    backup('my_backup', mock.Mock())
-
-    assert mock_backup_data_stream.call_count == 3
-    assert mock_manifest.insert_or_update.call_count == 0
-    assert mock_logger.info.call_count == 0
-    assert mock_logger.exception.call_count == 3
-    assert mock_logger.warning.call_count == 3
-    assert mock_manifest.delete.call_count == 0
+        assert mock_scan.call_args_list == [
+            mock.call('/foo', backup_store.manifest, []),
+            mock.call('/bar', backup_store.manifest, []),
+        ]
+        assert sorted(backup_store.manifest.get_diff_pair.call_args_list) == sorted([
+            mock.call('/foo/file1'),
+            mock.call('/bar/file1'),
+            mock.call('/bar/file2'),
+        ])
+        assert mock_save_copy.call_count == 1
+        assert mock_save_diff.call_count == 1
+        assert backup_store.manifest.delete.call_args_list == [mock.call('/bar/file3')]
+        assert backup_store.save.call_args_list == [
+            mock.call(MANIFEST_PATH, backup_store.manifest.stream.return_value),
+        ]
+        assert mock_logger.info.call_count == 4
+        assert mock_logger.exception.call_count == 1
 
 
-def test_all_up_to_date(backup_patches):
-    mock_manifest, mock_backup_data_stream, mock_file_contents_stream, mock_logger = backup_patches
-    mock_manifest.tracked_files.return_value = set(INITIAL_FILES)
-    mock_manifest.is_current.return_value = True
-    backup('my_backup', mock.Mock())
+def test_backup_no_change():
+    backup_store = mock.Mock()
+    backup_store.manifest.files.return_value = set(['/foo/file1', '/foo/file2', '/foo/file3'])
+    with staticconf.testing.PatchConfiguration({'directories': ['/foo']}, namespace='test_backup'), \
+            mock.patch('backuppy.backup.compile_exclusions') as mock_compile, \
+            mock.patch('backuppy.backup._scan_directory') as mock_scan, \
+            mock.patch('backuppy.backup._save_copy') as mock_save_copy, \
+            mock.patch('backuppy.backup._save_diff') as mock_save_diff, \
+            mock.patch('backuppy.backup.logger') as mock_logger:
+        mock_compile.return_value = []
+        mock_scan.side_effect = [
+            (set(), set(['/foo/file1', '/foo/file2', '/foo/file3'])),
+        ]
 
-    assert mock_backup_data_stream.call_count == 0
-    assert mock_manifest.insert_or_update.call_count == 0
-    assert mock_logger.info.call_count == 3
-    assert mock_logger.exception.call_count == 0
-    assert mock_manifest.delete.call_count == 0
+        backup('test_backup', backup_store)
+
+        assert mock_scan.call_args_list == [
+            mock.call('/foo', backup_store.manifest, []),
+        ]
+        assert backup_store.manifest.get_diff_pair.call_count == 0
+        assert mock_save_copy.call_count == 0
+        assert mock_save_diff.call_count == 0
+        assert backup_store.manifest.delete.call_count == 0
+        assert backup_store.save.call_count == 0
+        assert mock_logger.info.call_count == 0
+        assert mock_logger.exception.call_count == 0

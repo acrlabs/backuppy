@@ -1,6 +1,7 @@
 import io
 import os
 import time
+from hashlib import sha256
 from typing import Dict
 from typing import IO
 from typing import List
@@ -10,8 +11,7 @@ from typing import Tuple
 
 import yaml
 
-from backuppy.io import BLOCK_SIZE
-from backuppy.io import ReadSha
+from backuppy.io import IOIter
 from backuppy.util import EqualityMixin
 from backuppy.util import get_color_logger
 
@@ -21,21 +21,21 @@ logger = get_color_logger(__name__)
 class ManifestEntry(yaml.YAMLObject, EqualityMixin):
     yaml_tag = u'!entry'
 
-    def __init__(self, abs_file_name: str, sha: bytes = None) -> None:
+    def __init__(self, abs_file_name: str, sha: str = '') -> None:
         file_stat = os.stat(abs_file_name)
         self.sha = sha
         if not self.sha:
-            read_sha = ReadSha(abs_file_name)
-            with read_sha as f:
-                while f.read(BLOCK_SIZE):
-                    continue
-            self.sha = read_sha.hexdigest
+            sha_fn = sha256()
+            with open(abs_file_name, 'rb') as f:
+                for data in IOIter(f, side_effects=[sha_fn.update]):
+                    pass  # don't care about the data here
+                self.sha = sha_fn.hexdigest()
         self.mtime = int(file_stat.st_mtime)
         self.uid = file_stat.st_uid
         self.gid = file_stat.st_gid
         self.mode = file_stat.st_mode
 
-    def __repr__(self):
+    def __repr__(self):  # pragma: no cover
         return f'<{self.sha}, {self.mtime}, {self.uid}, {self.gid}, {self.mode}>'
 
 
@@ -91,14 +91,11 @@ class Manifest:
 
         # we need to find the index of the base file; this is the most recent file in the
         # Manifest which is not a diff
-        try:
-            base_index = max(
-                i for
-                i, (commit_time, entry, is_diff) in enumerate(history)
-                if entry and not is_diff
-            )
-        except ValueError:
-            base_index = 0
+        base_index = max(
+            i for
+            i, (commit_time, entry, is_diff) in enumerate(history)
+            if not is_diff  # deleted files are not diffs, so this will return None in that case
+        )
 
         base = history[base_index][1]
         latest = history[-1][1]

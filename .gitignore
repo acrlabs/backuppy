@@ -34,3 +34,4 @@ venv
 __pycache__
 .coverage
 .cache
+.mypy_cache

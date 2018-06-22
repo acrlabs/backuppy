@@ -1,118 +1,116 @@
 from copy import deepcopy
-from hashlib import sha256
 
 import mock
 import pytest
 
 from backuppy.manifest import Manifest
 from backuppy.manifest import ManifestEntry
-from tests.conftest import INITIAL_FILES
 
-
-def sha(string):
-    return sha256(string.encode()).hexdigest()
-
-
-def overwrite_file(name=INITIAL_FILES[0], contents='foo'):
-    with open(name, 'w') as f:
-        f.write(contents)
+INITIAL_FILES = ['/file1', '/file2', '/file3']
 
 
 @pytest.fixture
-def manifest(fake_filesystem):
+def mock_time():
+    with mock.patch('backuppy.manifest.time') as mock_time:
+        mock_time.time.return_value = 1
+        yield mock_time
+
+
+@pytest.fixture
+def new_entry():
+    with mock.patch('backuppy.manifest.os.stat'):
+        return ManifestEntry('/file1', sha=f'def1234')
+
+
+@pytest.fixture
+def manifest():
     m = Manifest()
-    m.contents = {name: [[0, ManifestEntry(name)]] for name in INITIAL_FILES}
+    with mock.patch('backuppy.manifest.os.stat'):
+        m.contents = {name: [(0, ManifestEntry(name, sha=f'abcd{i}'), False)] for i, name in enumerate(INITIAL_FILES)}
     return m
 
 
-def test_last_entry(manifest):
+def test_get_diff_pair_no_entry(manifest):
+    assert manifest.get_diff_pair('/foo') == (None, None)
+
+
+def test_get_diff_pair_only_base(manifest):
     for name in INITIAL_FILES:
-        assert manifest.get_last_entry(name) == ManifestEntry(name)
-
-    overwrite_file()
-    new_entry = ManifestEntry(INITIAL_FILES[0])
-    manifest.contents[INITIAL_FILES[0]].append([1, new_entry])
-    assert manifest.get_last_entry(INITIAL_FILES[0]) == new_entry
+        entry = manifest.contents[name][0][1]
+        assert manifest.get_diff_pair(name) == (entry, entry)
 
 
-def test_last_entry_not_present(manifest):
-    assert manifest.get_last_entry('/file/not/present') is None
+def test_get_diff_pair_changed(manifest, new_entry):
+    base, latest = manifest.contents['/file1'][0][1], new_entry
+    manifest.contents['/file1'].append([1, latest, True])
+    assert manifest.get_diff_pair('/file1') == (base, latest)
+
+
+def test_get_diff_pair_file_deleted(manifest):
+    manifest.contents['/file1'].append([1, None, False])
+    assert manifest.get_diff_pair('/file1') == (None, None)
+
+
+def test_get_diff_pair_file_deleted_and_restored(manifest, new_entry):
+    base, latest = manifest.contents['/file1'][0][1], new_entry
+    manifest.contents['/file1'].append([1, None, False])
+    manifest.contents['/file1'].append([2, base, False])
+    manifest.contents['/file1'].append([3, latest, True])
+    assert manifest.get_diff_pair('/file1') == (base, latest)
+
+
+def test_get_diff_pair_timestamp(manifest):
+    pass
 
 
 def test_is_current(manifest):
-    for name in INITIAL_FILES:
-        assert manifest.is_current(name)
-    overwrite_file()
-    assert not manifest.is_current(INITIAL_FILES[0])
+    with mock.patch('backuppy.manifest.ManifestEntry') as mock_entry:
+        for name in INITIAL_FILES:
+            mock_entry.return_value = manifest.contents[name][0][1]
+            assert manifest.is_current(name)
+
+            mock_entry.return_value = mock.Mock()
+            assert not manifest.is_current(name)
 
 
-def test_is_current_not_present(manifest):
-    assert not manifest.is_current('/c/not/backed/up')
+def test_insert(mock_time, manifest):
+    mock_time.return_value = 1
+    new_file = '/not/backed/up'
+    with mock.patch('backuppy.manifest.os.stat'):
+        new_entry = ManifestEntry(new_file, sha='b33f')
+    manifest.insert_or_update(new_file, new_entry, True)
+    assert set(manifest.contents.keys()) == set(INITIAL_FILES + [new_file])
+    assert manifest.contents[new_file] == [(1, new_entry, True)]
+    for entries in manifest.contents.values():
+        assert len(entries) == 1
 
 
-@mock.patch('backuppy.manifest.time')
-class TestInsertUpdateDelete:
-    def test_insert(self, mock_time, manifest):
-        mock_time.return_value = 1
-        new_file = '/c/not/backed/up'
-        new_entry = ManifestEntry(new_file)
-        manifest.insert_or_update(new_file, new_entry)
-        assert set(manifest.contents.keys()) == set(INITIAL_FILES + [new_file])
-        assert manifest.contents[new_file] == [[1, new_entry]]
-        for entries in manifest.contents.values():
-            assert len(entries) == 1
+def test_update(mock_time, manifest, new_entry):
+    mock_time.return_value = 1
+    manifest.insert_or_update('/file1', new_entry, True)
+    assert set(manifest.contents.keys()) == set(INITIAL_FILES)
+    assert manifest.contents[INITIAL_FILES[0]][-1] == (1, new_entry, True)
+    assert len(manifest.contents[INITIAL_FILES[0]]) == 2
+    assert len(manifest.contents[INITIAL_FILES[1]]) == 1
+    assert len(manifest.contents[INITIAL_FILES[2]]) == 1
 
-    def test_update(self, mock_time, manifest):
-        mock_time.return_value = 1
-        overwrite_file()
-        new_entry = ManifestEntry(INITIAL_FILES[0])
-        manifest.insert_or_update(INITIAL_FILES[0], new_entry)
-        assert set(manifest.contents.keys()) == set(INITIAL_FILES)
-        assert manifest.contents[INITIAL_FILES[0]][-1] == [1, new_entry]
-        assert len(manifest.contents[INITIAL_FILES[0]]) == 2
-        assert len(manifest.contents[INITIAL_FILES[1]]) == 1
-        assert len(manifest.contents[INITIAL_FILES[2]]) == 1
 
-    def test_delete(self, mock_time, manifest):
-        manifest.delete(INITIAL_FILES[0])
-        assert set(manifest.contents.keys()) == set(INITIAL_FILES)
-        assert manifest.contents[INITIAL_FILES[0]][-1] == [1, None]
-        assert len(manifest.contents[INITIAL_FILES[0]]) == 2
-        assert len(manifest.contents[INITIAL_FILES[1]]) == 1
-        assert len(manifest.contents[INITIAL_FILES[2]]) == 1
+def test_delete(mock_time, manifest):
+    manifest.delete(INITIAL_FILES[0])
+    assert set(manifest.contents.keys()) == set(INITIAL_FILES)
+    assert manifest.contents[INITIAL_FILES[0]][-1] == (1, None, False)
+    assert len(manifest.contents[INITIAL_FILES[0]]) == 2
+    assert len(manifest.contents[INITIAL_FILES[1]]) == 1
+    assert len(manifest.contents[INITIAL_FILES[2]]) == 1
 
-    def test_delete_unknown(self, mock_time, manifest):
-        old_contents = deepcopy(manifest.contents)
-        with mock.patch('backuppy.manifest.logger') as mock_logger:
-            manifest.delete('foo')
-            assert mock_logger.warn.call_count == 1
-            assert manifest.contents == old_contents
+
+def test_delete_unknown(mock_time, manifest):
+    old_contents = deepcopy(manifest.contents)
+    with mock.patch('backuppy.manifest.logger') as mock_logger:
+        manifest.delete('foo')
+        assert mock_logger.warn.call_count == 1
+        assert manifest.contents == old_contents
 
 
 def test_tracked_files(manifest):
-    assert manifest.tracked_files() == set(INITIAL_FILES)
-
-
-def test_manifest_snapshot(manifest):
-    overwrite_file(INITIAL_FILES[0], 'foo')
-    overwrite_file(INITIAL_FILES[2], 'asdf')
-    manifest.contents[INITIAL_FILES[0]].append([10, ManifestEntry(INITIAL_FILES[0])])
-    manifest.contents[INITIAL_FILES[1]].append([12, None])
-    manifest.contents[INITIAL_FILES[2]].append([20, ManifestEntry(INITIAL_FILES[2])])
-
-    zeroth_snapshot = manifest.snapshot(-1)
-    assert not zeroth_snapshot
-
-    first_snapshot = manifest.snapshot(0)
-    assert set(first_snapshot.keys()) == set(INITIAL_FILES)
-    assert {entry.sha for entry in first_snapshot.values()} == {sha(name) for name in INITIAL_FILES}
-
-    second_snapshot = manifest.snapshot(15)
-    assert set(second_snapshot.keys()) == {INITIAL_FILES[0], INITIAL_FILES[2]}
-    assert second_snapshot[INITIAL_FILES[0]].sha == sha('foo')
-    assert second_snapshot[INITIAL_FILES[2]].sha == sha(INITIAL_FILES[2])
-
-    third_snapshot = manifest.snapshot(25)
-    assert set(second_snapshot.keys()) == {INITIAL_FILES[0], INITIAL_FILES[2]}
-    assert third_snapshot[INITIAL_FILES[0]].sha == sha('foo')
-    assert third_snapshot[INITIAL_FILES[2]].sha == sha('asdf')
+    assert manifest.files() == set(INITIAL_FILES)
