@@ -11,10 +11,10 @@ import staticconf
 import yaml
 
 from backuppy.manifest import Manifest
-from backuppy.util import get_color_logger
+import colorlog
 
 MANIFEST_PATH = 'manifest'
-logger = get_color_logger(__name__)
+logger = colorlog.getLogger(__name__)
 
 
 class BackupStore(metaclass=ABCMeta):

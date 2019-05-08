@@ -6,12 +6,12 @@ from typing import Union
 from backuppy.crypto import compress_and_encrypt
 from backuppy.crypto import decrypt_and_unpack
 from backuppy.stores.backup_store import BackupStore
-from backuppy.util import get_color_logger
+import colorlog
 from tests.crypto_test import TEMP_AES_KEY  # TODO DO NOT USE IN PRODUCTION
 from tests.crypto_test import TEMP_IV  # TODO DO NOT USE IN PRODUCTION
 
 
-logger = get_color_logger(__name__)
+logger = colorlog.getLogger(__name__)
 
 
 class LocalBackupStore(BackupStore):

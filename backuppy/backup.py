@@ -15,10 +15,10 @@ from backuppy.stores.backup_store import BackupStore
 from backuppy.stores.backup_store import MANIFEST_PATH
 from backuppy.util import compile_exclusions
 from backuppy.util import file_walker
-from backuppy.util import get_color_logger
+import colorlog
 from backuppy.util import sha_to_path
 
-logger = get_color_logger(__name__)
+logger = colorlog.getLogger(__name__)
 
 
 def _scan_directory(abs_base_path: str, manifest: Manifest, exclusions: List[Pattern]) -> Tuple[set, set]:

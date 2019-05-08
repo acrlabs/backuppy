@@ -13,9 +13,9 @@ import yaml
 
 from backuppy.io import IOIter
 from backuppy.util import EqualityMixin
-from backuppy.util import get_color_logger
+import colorlog
 
-logger = get_color_logger(__name__)
+logger = colorlog.getLogger(__name__)
 
 
 class ManifestEntry(yaml.YAMLObject, EqualityMixin):

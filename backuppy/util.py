@@ -4,8 +4,6 @@ from typing import List
 from typing import Pattern
 from typing import Tuple
 
-import colorlog
-
 
 class EqualityMixin:  # pragma: no cover
     def __eq__(self, other):
@@ -26,14 +24,6 @@ def file_walker(path, on_error=None):  # pragma: no cover
     for root, dirs, files in os.walk(path, onerror=on_error):
         for f in files:
             yield os.path.join(root, f)
-
-
-def get_color_logger(name):  # pragma: no cover
-    handler = colorlog.StreamHandler()
-    handler.setFormatter(colorlog.ColoredFormatter('%(log_color)s%(levelname)s:%(name)s:%(message)s'))
-    logger = colorlog.getLogger(name)
-    logger.addHandler(handler)
-    return logger
 
 
 def sha_to_path(sha: str) -> Tuple[str, ...]:
