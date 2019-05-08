@@ -4,8 +4,8 @@ import colorlog
 import staticconf
 
 from backuppy.args import subparser
-from backuppy.stores import get_backup_store
 from backuppy.backup import backup
+from backuppy.stores import get_backup_store
 from backuppy.util import compile_exclusions
 
 logger = colorlog.getLogger(__name__)

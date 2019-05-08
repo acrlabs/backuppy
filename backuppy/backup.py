@@ -5,6 +5,7 @@ from typing import List
 from typing import Pattern
 from typing import Tuple
 
+import colorlog
 import staticconf
 
 from backuppy.blob import compute_diff
@@ -15,7 +16,6 @@ from backuppy.stores.backup_store import BackupStore
 from backuppy.stores.backup_store import MANIFEST_PATH
 from backuppy.util import compile_exclusions
 from backuppy.util import file_walker
-import colorlog
 from backuppy.util import sha_to_path
 
 logger = colorlog.getLogger(__name__)

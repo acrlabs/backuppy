@@ -3,10 +3,11 @@ from typing import IO
 from typing import Tuple
 from typing import Union
 
+import colorlog
+
 from backuppy.crypto import compress_and_encrypt
 from backuppy.crypto import decrypt_and_unpack
 from backuppy.stores.backup_store import BackupStore
-import colorlog
 from tests.crypto_test import TEMP_AES_KEY  # TODO DO NOT USE IN PRODUCTION
 from tests.crypto_test import TEMP_IV  # TODO DO NOT USE IN PRODUCTION
 

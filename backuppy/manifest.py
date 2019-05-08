@@ -9,11 +9,11 @@ from typing import Optional
 from typing import Set
 from typing import Tuple
 
+import colorlog
 import yaml
 
 from backuppy.io import IOIter
 from backuppy.util import EqualityMixin
-import colorlog
 
 logger = colorlog.getLogger(__name__)
 

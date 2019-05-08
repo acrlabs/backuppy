@@ -7,11 +7,11 @@ from typing import Optional
 from typing import Tuple
 from typing import Union
 
+import colorlog
 import staticconf
 import yaml
 
 from backuppy.manifest import Manifest
-import colorlog
 
 MANIFEST_PATH = 'manifest'
 logger = colorlog.getLogger(__name__)
