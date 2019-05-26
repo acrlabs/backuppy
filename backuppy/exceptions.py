@@ -2,11 +2,23 @@ class BackuppyException(Exception):
     pass
 
 
-class BackupReadFailedException(Exception):
+class BackupReadFailedException(BackuppyException):
     pass
 
 
 class DiffParseError(BackuppyException):
+    pass
+
+
+class DoubleBufferError(BackuppyException):
+    pass
+
+
+class FileChangedException(BackuppyException):
+    pass
+
+
+class ManifestLockedException(BackuppyException):
     pass
 
 

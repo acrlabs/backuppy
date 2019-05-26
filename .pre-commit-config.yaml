@@ -7,9 +7,6 @@ repos:
     -   id: end-of-file-fixer
         language_version: python3.6
         exclude: ^\.activate\.sh$
-    -   id: autopep8-wrapper
-        language_version: python3.6
-        args: [-i, --max-line-length=121]
     -   id: check-yaml
         language_version: python3.6
     -   id: debug-statements
@@ -24,3 +21,9 @@ repos:
     hooks:
     -   id: reorder-python-imports
         language_version: python3.6
+-   repo: git@github.com:pre-commit/mirrors-autopep8
+    sha: v1.4.4
+    hooks:
+    -   id: autopep8
+        language_version: python3.6
+        args: [-i, --ignore, "E226,E24,W50,W690,E702,E703"]

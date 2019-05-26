@@ -2,7 +2,6 @@ import os
 import re
 from typing import List
 from typing import Pattern
-from typing import Tuple
 
 
 class EqualityMixin:  # pragma: no cover
@@ -26,5 +25,9 @@ def file_walker(path, on_error=None):  # pragma: no cover
             yield os.path.join(root, f)
 
 
-def sha_to_path(sha: str) -> Tuple[str, ...]:
-    return (sha[:2], sha[2:4], sha[4:])
+def path_join(*args):
+    return os.path.normpath('/'.join(args))
+
+
+def sha_to_path(sha: str) -> str:
+    return os.path.join(sha[:2], sha[2:4], sha[4:])

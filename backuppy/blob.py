@@ -1,14 +1,10 @@
-import os
 import re
-from hashlib import sha256
 from itertools import zip_longest
-from typing import IO
-from typing import Optional
+from typing import Tuple
 
 import edlib
 
 from backuppy.exceptions import DiffParseError
-from backuppy.io import BLOCK_SIZE
 from backuppy.io import IOIter
 
 DEL = b'D'
@@ -17,45 +13,20 @@ REPL = b'X'
 SEP = b'|'
 
 
-def _copy(fd_orig: IO[bytes], fd_new: IO[bytes], to_pos: Optional[int] = None, offset: int = 0) -> None:
-    """ copy data from fd_orig to fd_new up to to_pos - offset
-
-    :param fd_orig: an open IO stream in 'rb' mode
-    :param fd_new: an open IO stream in 'wb' mode
-    :param to_pos: the seek position in fd_orig to copy to, or None to copy the rest of the file
-    :param offset: how much to offset the copy position by
-    """
-    to_pos = to_pos - offset if to_pos else os.stat(fd_orig.fileno()).st_size
-    orig_bytes = b''
-    while True:
-        orig_pos = fd_orig.tell()
-        if orig_pos >= to_pos:
-            break
-        requested_read_size = min(BLOCK_SIZE, to_pos - orig_pos)
-        orig_bytes = fd_orig.read(requested_read_size)
-        if not orig_bytes:
-            raise DiffParseError('No more data in source file')
-        fd_new.write(orig_bytes)
-
-
-def apply_diff(fd_orig: IO[bytes], fd_diff: IO[bytes], fd_new: IO[bytes]) -> None:
+def apply_diff(orig_file: IOIter, diff_file: IOIter, new_file: IOIter) -> None:
     """ Given an open original file and a diff, write out the new file
 
-    :param fd_orig: an open IO stream in 'rb' mode
-    :param fd_diff: an open IO stream in 'rb' mode
-    :param fd_new: an open IO stream in 'wb' mode
+    :param orig_file: an open IO stream in 'rb' mode
+    :param diff_file: an open IO stream in 'rb' mode
+    :param new_file: an open IO stream in 'wb' mode
     """
-
-    # Make sure we're at the beginning
-    fd_orig.seek(0)
-    fd_diff.seek(0)
-    fd_new.seek(0)
 
     # The outer loop reads a chunk of data at a time; the inner loop parses
     # the read chunk one step at a time and applies it
     diff, offset = b'', 0
-    for data in IOIter(fd_diff):
-        diff += data
+    writer = new_file.writer(); next(writer)
+    for diff_chunk in diff_file.reader():
+        diff += diff_chunk
         while diff:
             # try to parse the next chunk; if we can't, break out of the loop to get more data
             try:
@@ -64,7 +35,8 @@ def apply_diff(fd_orig: IO[bytes], fd_diff: IO[bytes], fd_new: IO[bytes]) -> Non
                 break
 
             contents_pos = int(position[1:])
-            _copy(fd_orig, fd_new, contents_pos, offset)
+            for data in orig_file.reader(end=contents_pos - offset, reset_pos=False):
+                writer.send(data)
             action = action_len[0:1]
             contents_len = int(action_len[1:])
 
@@ -75,13 +47,13 @@ def apply_diff(fd_orig: IO[bytes], fd_diff: IO[bytes], fd_new: IO[bytes]) -> Non
             contents = b'' if action == DEL else remainder[:contents_len]
             diff = remainder if action == DEL else remainder[contents_len + 1:]
             if action == DEL:
-                fd_orig.seek(contents_len, 1)
+                orig_file.fd.seek(contents_len, 1)
             elif action == INS:
-                fd_new.write(contents)
+                writer.send(contents)
                 offset += len(contents)
             elif action == REPL:
-                fd_new.write(contents)
-                fd_orig.seek(contents_len, 1)
+                writer.send(contents)
+                orig_file.fd.seek(contents_len, 1)
             else:
                 raise DiffParseError(f'Expected an action, found {action}')
 
@@ -91,22 +63,21 @@ def apply_diff(fd_orig: IO[bytes], fd_diff: IO[bytes], fd_new: IO[bytes]) -> Non
 
     # If we get here and there's still data in the original file, it must be equal to
     # what was in the new file, so just copy any remaining data from the original file to the new file
-    _copy(fd_orig, fd_new, offset=offset)
+    for data in orig_file.reader(end=orig_file.stat().st_size, reset_pos=False):
+        writer.send(data)
 
 
-def compute_diff(fd_orig: IO[bytes], fd_new: IO[bytes], fd_diff: IO[bytes]) -> str:
+def compute_sha_and_diff(orig_file: IOIter, new_file: IOIter, diff_file: IOIter) -> Tuple[str, IOIter]:
     """ Given an open original file and a new file, compute the diff
 
-    :param fd_orig: an open IO stream in 'rb' mode
-    :param fd_new: an open IO stream in 'rb' mode
-    :param fd_diff: an open IO stream in 'wb' mode
+    :param orig_file: an open IO stream in 'rb' mode
+    :param new_file: an open IO stream in 'rb' mode
+    :param diff_file: an open IO stream in 'wb' mode
     """
 
-    # Make sure we're at the beginning
-    fd_diff.seek(0)
-
-    sha_fn, pos = sha256(), 0
-    for orig_bytes, new_bytes in zip_longest(IOIter(fd_orig), IOIter(fd_new, side_effects=[sha_fn.update])):
+    pos = 0
+    writer = diff_file.writer(); next(writer)
+    for orig_bytes, new_bytes in zip_longest(orig_file.reader(), new_file.reader()):
         if not orig_bytes:
             steps = [(len(new_bytes), INS)]
         elif not new_bytes:
@@ -129,7 +100,7 @@ def compute_diff(fd_orig: IO[bytes], fd_new: IO[bytes], fd_diff: IO[bytes]) -> s
             else:  # can only hit this case if new_bytes is not None
                 contents = new_bytes[local_pos - num:local_pos]
             diff += f'{num}'.encode('utf-8') + SEP + contents + b'\n'
-        fd_diff.write(diff)
-        pos += BLOCK_SIZE
+        writer.send(diff)
+        pos += orig_file.block_size
 
-    return sha_fn.hexdigest()
+    return new_file.sha(), diff_file

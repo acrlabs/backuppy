@@ -9,7 +9,7 @@ from backuppy import __version__
 logger = colorlog.getLogger(__name__)
 
 
-class CustomHelpFormatter(argparse.ArgumentDefaultsHelpFormatter):
+class CustomHelpFormatter(argparse.ArgumentDefaultsHelpFormatter):  # pragma: no cover
     def __init__(self, prog):
         super().__init__(prog, max_help_position=35, width=100)
 
@@ -48,17 +48,12 @@ def parse_args(description: str) -> argparse.Namespace:  # pragma: no cover
     root_parser.add_argument(
         '--log-level',
         default='warning',
-        choices=['debug', 'info', 'warning', 'error', 'critical'],
+        choices=['debug', 'debug2', 'info', 'warning', 'error', 'critical'],
     )
     root_parser.add_argument(
         '-v', '--version',
         action='version',
         version='backuppy' + __version__
-    )
-    root_parser.add_argument(
-        '--config',
-        default='backuppy.conf',
-        help='Config file to load specifying what to back up',
     )
     root_parser.add_argument(
         '--disable-compression',

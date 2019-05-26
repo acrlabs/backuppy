@@ -1,122 +1,152 @@
-import io
 import os
+import sqlite3
 import time
-from hashlib import sha256
-from typing import Dict
-from typing import IO
-from typing import List
 from typing import Optional
 from typing import Set
 from typing import Tuple
 
 import colorlog
-import yaml
 
-from backuppy.io import IOIter
 from backuppy.util import EqualityMixin
 
 logger = colorlog.getLogger(__name__)
 
 
-class ManifestEntry(yaml.YAMLObject, EqualityMixin):
-    yaml_tag = u'!entry'
-
-    def __init__(self, abs_file_name: str, sha: str = '') -> None:
-        file_stat = os.stat(abs_file_name)
+class ManifestEntry(EqualityMixin):
+    def __init__(
+        self,
+        abs_file_name: str,
+        sha: str,
+        base_sha: Optional[str],
+        mtime: int,
+        uid: int,
+        gid: int,
+        mode: int,
+    ) -> None:
+        self.abs_file_name = abs_file_name
         self.sha = sha
-        if not self.sha:
-            sha_fn = sha256()
-            with open(abs_file_name, 'rb') as f:
-                for data in IOIter(f, side_effects=[sha_fn.update]):
-                    pass  # don't care about the data here
-                self.sha = sha_fn.hexdigest()
-        self.mtime = int(file_stat.st_mtime)
-        self.uid = file_stat.st_uid
-        self.gid = file_stat.st_gid
-        self.mode = file_stat.st_mode
+        self.base_sha = base_sha
+        self.mtime = mtime
+        self.uid = uid
+        self.gid = gid
+        self.mode = mode
 
-    def __repr__(self):  # pragma: no cover
-        return f'<{self.sha}, {self.mtime}, {self.uid}, {self.gid}, {self.mode}>'
+    @classmethod
+    def from_stat(
+        cls,
+        abs_file_name: str,
+        sha: str,
+        base_sha: Optional[str],
+        file_stat: os.stat_result,
+    ) -> 'ManifestEntry':
+        return cls(
+            abs_file_name,
+            sha,
+            base_sha,
+            int(file_stat.st_mtime),
+            file_stat.st_uid,
+            file_stat.st_gid,
+            file_stat.st_mode,
+        )
+
+    @classmethod
+    def from_row(cls, row: sqlite3.Row) -> 'ManifestEntry':
+        return cls(row['abs_file_name'], row['sha'], row['base_sha'], row['mtime'], row['uid'], row['gid'], row['mode'])
 
 
 DiffPair = Tuple[Optional[ManifestEntry], Optional[ManifestEntry]]
-ManifestContents = Dict[str, List[Tuple[float, Optional[ManifestEntry], bool]]]
 
 
 class Manifest:
-    """ A manifest listing all of the files tracked in the backup
-
-    The manifest stores all of the information in a "contents" dictionary, which
-    has the following format:
-
-        /full/path/to/file1
-            - (timestamp1, ManifestEntry, False)
-            - (timestamp3, ManifestEntry, True)
-        /full/path/to/file2:
-            - (timestamp2, ManifestEntry, False)
-            ...
-        ...
-
-    The list entries for each file are tuples indicating the time that the file
-    was backed up, the relevant file metadata, and whether the entry should be intepreted
-    as a diff or as the actual file contents.  This list is maintained in sorted order,
-    so the last entry in the list shows the most recent version of the file.  Thus, it is
-    possible to get a snapshot of the recorded history at any time T by iterating through
-    the manifest and taking the most recent entry for each file with time less than T.
+    """ A sqlite3 manifest listing all of the files tracked in the backup
 
     ::note: empty directories are ignored by the manifest
     """
 
-    def __init__(self):
-        """ Create an empty manifest; we only do this if we're starting a new backup """
-        self.contents: ManifestContents = {}
+    def __init__(self, manifest_filename: str, start_new_manifest: bool):
+        """ Connect to a manifest file and optionally initialize a new database """
+        self._conn = sqlite3.connect(manifest_filename)
+        self._conn.set_trace_callback(logger.debug2)
+        self._conn.row_factory = sqlite3.Row
+        self._cursor = self._conn.cursor()
+        if start_new_manifest:
+            self._cursor.execute(
+                '''
+                create table manifest (
+                    abs_file_name text not null,
+                    sha text,
+                    mtime integer,
+                    uid integer,
+                    gid integer,
+                    mode integer,
+                    commit_timestamp integer not null
+                )
+                '''
+            )
+            self._cursor.execute(
+                '''
+                create table diff_pairs (
+                    sha text not null unique,
+                    base_sha text not null,
+                    foreign key(sha) references manifest(sha)
+                )
+                '''
+            )
+            self._cursor.execute('create index manifest_idx on manifest(abs_file_name, commit_timestamp)')
 
-    def stream(self) -> IO[bytes]:
-        """ Return a byte-stream containing the contents of the manifest for writing """
-        return io.BytesIO(yaml.dump(self).encode())
-
-    def get_diff_pair(self, abs_file_name: str, timestamp: Optional[float] = None) -> DiffPair:
+    def get_entry(self, abs_file_name: str, timestamp: Optional[int] = None) -> Optional[ManifestEntry]:
         """ Return a (base file, diff) pair which can be used to reconstruct the specified file
 
         :param abs_file_name: the name of the file to reconstruct
-        :param timestamp: the point in time for which we want to reconstruct the file (TODO)
+        :param timestamp: the point in time for which we want to reconstruct the file
         :returns: a DiffPair object
         """
 
-        # if the file doesn't exist in the manifest, return an empty DiffPair
-        try:
-            history = self.contents[abs_file_name]
-        except KeyError:
-            return None, None
-
-        # we need to find the index of the base file; this is the most recent file in the
-        # Manifest which is not a diff
-        base_index = max(
-            i for
-            i, (commit_time, entry, is_diff) in enumerate(history)
-            if not is_diff  # deleted files are not diffs, so this will return None in that case
+        timestamp = timestamp or int(time.time())
+        self._cursor.execute(
+            '''
+            select * from manifest natural left join diff_pairs
+            where abs_file_name=? and commit_timestamp<=? order by commit_timestamp
+            ''',
+            (abs_file_name, timestamp),
         )
+        rows = self._cursor.fetchall()
+        if not rows:
+            return None
 
-        base = history[base_index][1]
-        latest = history[-1][1]
+        latest_row = rows[-1]
+        return ManifestEntry.from_row(latest_row)
 
-        return base, latest
-
-    def is_current(self, abs_file_name: str) -> bool:
-        """ Check to see if the specified file name is up-to-date in the manifest """
-        _, latest_entry = self.get_diff_pair(abs_file_name)
-        return (latest_entry == ManifestEntry(abs_file_name))
-
-    def insert_or_update(self, abs_file_name: str, entry: ManifestEntry, is_diff: bool) -> None:
+    def insert_or_update(self, entry: ManifestEntry) -> None:
         """ Insert a new entry into the manifest
 
         :param abs_file_name: the name of the file
         :param entry: the saved file metadata (we have to pass this in instead of re-creating
             it because the contents of the file may have changed since backing up)
-        :param is_diff: indicates whether the backed-up file is a diff or a complete copy of the original file
         """
-        commit_time = int(time.time())
-        self.contents.setdefault(abs_file_name, []).append((commit_time, entry, is_diff))
+        commit_timestamp = int(time.time())
+        self._cursor.execute(
+            '''
+            insert into manifest
+            (abs_file_name, sha, mtime, uid, gid, mode, commit_timestamp)
+            values (?, ?, ?, ?, ?, ?, ?)
+            ''',
+            (
+                entry.abs_file_name,
+                entry.sha,
+                entry.mtime,
+                entry.uid,
+                entry.gid,
+                entry.mode,
+                commit_timestamp,
+            ),
+        )
+        if entry.base_sha:
+            self._cursor.execute(
+                'insert or ignore into diff_pairs (sha, base_sha) values (?, ?)',
+                (entry.sha, entry.base_sha),
+            )
+        self._conn.commit()
 
     def delete(self, abs_file_name: str) -> None:
         """ Mark that a file has been deleted
@@ -127,29 +157,26 @@ class Manifest:
         :param abs_file_name: the name of the file
         """
 
-        commit_time = int(time.time())
-        try:
-            self.contents[abs_file_name].append((commit_time, None, False))
-        except KeyError:
-            logger.warn(f'Tried to delete unknown file {abs_file_name}')
+        if not self.get_entry(abs_file_name):
+            logger.warn('Trying to delete untracked file; nothing written to datastore')
+            return
 
-    def files(self) -> Set[str]:
-        """ Return all of the (currently-existing) files in the manifest """
-        return set(
-            filename
-            for filename, entries in self.contents.items()
-            if entries[-1][1]  # don't return files that have been deleted
+        commit_timestamp = int(time.time())
+        self._cursor.execute(
+            'insert into manifest (abs_file_name, commit_timestamp) values (?, ?)',
+            (abs_file_name, commit_timestamp),
         )
+        self._conn.commit()
 
-    # def snapshot(self, timestamp: float) -> Dict[str, ManifestEntry]:
-    #     manifest_snapshot = {}
-    #     for abs_file_name, entries in self.contents.items():
-    #         # if the earliest entry is greater than our timestamp, skip it
-    #         if entries[0][0] > timestamp:
-    #             continue
-    #         commit_time, entry = max(((ct, e) for ct, e in entries if ct <= timestamp))
-
-    #         # Only include the path if the file hasn't been deleted
-    #         if entry:
-    #             manifest_snapshot[abs_file_name] = entry
-    #     return manifest_snapshot
+    def files(self, timestamp: Optional[int] = None) -> Set[str]:
+        """ Return all of the (currently-existing) files in the manifest """
+        timestamp = timestamp or int(time.time())
+        self._cursor.execute(
+            '''
+            select abs_file_name, max(commit_timestamp) from manifest
+            where commit_timestamp <=?
+            group by abs_file_name having sha not null
+            ''',
+            (timestamp,),
+        )
+        return set(row['abs_file_name'] for row in self._cursor.fetchall())

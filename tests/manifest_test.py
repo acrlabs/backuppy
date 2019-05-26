@@ -1,5 +1,3 @@
-from copy import deepcopy
-
 import mock
 import pytest
 
@@ -9,108 +7,183 @@ from backuppy.manifest import ManifestEntry
 INITIAL_FILES = ['/file1', '/file2', '/file3']
 
 
-@pytest.fixture
+@pytest.fixture(autouse=True)
 def mock_time():
-    with mock.patch('backuppy.manifest.time') as mock_time:
-        mock_time.time.return_value = 1
-        yield mock_time
+    with mock.patch('backuppy.manifest.time.time', return_value=1000):
+        yield
 
 
 @pytest.fixture
-def new_entry():
-    with mock.patch('backuppy.manifest.os.stat'):
-        return ManifestEntry('/file1', sha=f'def1234')
+def mock_stat():
+    return mock.Mock(
+        st_mtime=100,
+        st_uid=1000,
+        st_gid=2000,
+        st_mode=34622,
+    )
 
 
 @pytest.fixture
-def manifest():
-    m = Manifest()
-    with mock.patch('backuppy.manifest.os.stat'):
-        m.contents = {name: [(0, ManifestEntry(name, sha=f'abcd{i}'), False)] for i, name in enumerate(INITIAL_FILES)}
+def mock_manifest():
+    m = Manifest(':memory:', start_new_manifest=True)
+    m._cursor.execute(
+        '''
+        insert into manifest (abs_file_name, sha, mtime, uid, gid, mode, commit_timestamp)
+        values
+        ('/foo', '12345678', 1, 1000, 2000, 34622, 50),
+        ('/foo', '12345679', 1, 1000, 2000, 34622, 100),
+        ('/bar', 'abcdef78', 4, 1000, 2000, 34622, 55),
+        ('/bar', '123def78', 110, 1000, 2000, 34622, 200),
+        ('/baz', 'fdecba21', 18, 1000, 2000, 34622, 50),
+        ('/baz', null, null, null, null, null, 100)
+        '''
+    )
+    m._cursor.execute('insert into diff_pairs (sha, base_sha) values ("123def78", "abcdef78")')
     return m
 
 
-def test_get_diff_pair_no_entry(manifest):
-    assert manifest.get_diff_pair('/foo') == (None, None)
+def test_load_new_manifest(mock_manifest):
+    mock_manifest._cursor.execute(
+        '''
+        select name from sqlite_master
+        where type ='table' and name not like 'sqlite_%'
+        '''
+    )
+    rows = mock_manifest._cursor.fetchall()
+    assert {r['name'] for r in rows} == {'manifest', 'diff_pairs'}
 
 
-def test_get_diff_pair_only_base(manifest):
-    for name in INITIAL_FILES:
-        entry = manifest.contents[name][0][1]
-        assert manifest.get_diff_pair(name) == (entry, entry)
+def test_load_existing_manifest():
+    m = Manifest(':memory:', start_new_manifest=False)
+    m._cursor.execute(
+        '''
+        select name from sqlite_master
+        where type ='table' and name not like 'sqlite_%'
+        '''
+    )
+    assert not m._cursor.fetchall()
 
 
-def test_get_diff_pair_changed(manifest, new_entry):
-    base, latest = manifest.contents['/file1'][0][1], new_entry
-    manifest.contents['/file1'].append([1, latest, True])
-    assert manifest.get_diff_pair('/file1') == (base, latest)
+def test_get_entry_no_entry(mock_manifest):
+    assert not mock_manifest.get_entry('/does_not_exist')
 
 
-def test_get_diff_pair_file_deleted(manifest):
-    manifest.contents['/file1'].append([1, None, False])
-    assert manifest.get_diff_pair('/file1') == (None, None)
+@pytest.mark.parametrize('commit_timestamp', [75, 200])
+def test_get_entry_no_diff(mock_manifest, commit_timestamp):
+    entry = mock_manifest.get_entry('/foo', commit_timestamp)
+    assert entry.abs_file_name == '/foo'
+    assert entry.sha == ('12345678' if commit_timestamp == 75 else '12345679')
+    assert entry.mtime == 1
+    assert entry.uid == 1000
+    assert entry.gid == 2000
+    assert entry.mode == 34622
 
 
-def test_get_diff_pair_file_deleted_and_restored(manifest, new_entry):
-    base, latest = manifest.contents['/file1'][0][1], new_entry
-    manifest.contents['/file1'].append([1, None, False])
-    manifest.contents['/file1'].append([2, base, False])
-    manifest.contents['/file1'].append([3, latest, True])
-    assert manifest.get_diff_pair('/file1') == (base, latest)
+def test_get_entry_with_diff(mock_manifest):
+    entry = mock_manifest.get_entry('/bar')
+    assert entry.abs_file_name == '/bar'
+    assert entry.sha == '123def78'
+    assert entry.base_sha == 'abcdef78'
+    assert entry.mtime == 110
+    assert entry.uid == 1000
+    assert entry.gid == 2000
+    assert entry.mode == 34622
 
 
-def test_get_diff_pair_timestamp(manifest):
-    pass
+def test_get_entry_file_deleted(mock_manifest):
+    entry = mock_manifest.get_entry('/baz', 110)
+    assert entry.abs_file_name == '/baz'
+    assert not entry.sha
+    assert not entry.mtime
+    assert not entry.uid
+    assert not entry.gid
+    assert not entry.mode
 
 
-def test_is_current(manifest):
-    with mock.patch('backuppy.manifest.ManifestEntry') as mock_entry:
-        for name in INITIAL_FILES:
-            mock_entry.return_value = manifest.contents[name][0][1]
-            assert manifest.is_current(name)
-
-            mock_entry.return_value = mock.Mock()
-            assert not manifest.is_current(name)
-
-
-def test_insert(mock_time, manifest):
-    mock_time.return_value = 1
+@pytest.mark.parametrize('base_sha', [None, 'f33b'])
+def test_insert_new_file(mock_manifest, mock_stat, base_sha):
     new_file = '/not/backed/up'
-    with mock.patch('backuppy.manifest.os.stat'):
-        new_entry = ManifestEntry(new_file, sha='b33f')
-    manifest.insert_or_update(new_file, new_entry, True)
-    assert set(manifest.contents.keys()) == set(INITIAL_FILES + [new_file])
-    assert manifest.contents[new_file] == [(1, new_entry, True)]
-    for entries in manifest.contents.values():
-        assert len(entries) == 1
+    new_entry = ManifestEntry.from_stat(new_file, sha='b33f', base_sha=base_sha, file_stat=mock_stat)
+    mock_manifest.insert_or_update(new_entry)
+    mock_manifest._cursor.execute(
+        '''
+        select * from manifest left natural join diff_pairs
+        where abs_file_name = '/not/backed/up'
+        '''
+    )
+    rows = mock_manifest._cursor.fetchall()
+    assert len(rows) == 1
+    assert rows[0]['abs_file_name'] == new_file
+    assert rows[0]['sha'] == 'b33f'
+    assert rows[0]['base_sha'] == base_sha
+    assert rows[0]['mtime'] == 100
+    assert rows[0]['uid'] == 1000
+    assert rows[0]['gid'] == 2000
+    assert rows[0]['mode'] == 34622
+    assert rows[0]['commit_timestamp'] == 1000
 
 
-def test_update(mock_time, manifest, new_entry):
-    mock_time.return_value = 1
-    manifest.insert_or_update('/file1', new_entry, True)
-    assert set(manifest.contents.keys()) == set(INITIAL_FILES)
-    assert manifest.contents[INITIAL_FILES[0]][-1] == (1, new_entry, True)
-    assert len(manifest.contents[INITIAL_FILES[0]]) == 2
-    assert len(manifest.contents[INITIAL_FILES[1]]) == 1
-    assert len(manifest.contents[INITIAL_FILES[2]]) == 1
+@pytest.mark.parametrize('base_sha', [None, 'f33b2'])
+def test_update(mock_manifest, mock_stat, base_sha):
+    new_file = '/foo'
+    new_entry = ManifestEntry.from_stat(new_file, sha='b33f2', base_sha=base_sha, file_stat=mock_stat)
+    mock_manifest.insert_or_update(new_entry)
+    mock_manifest._cursor.execute(
+        '''
+        select * from manifest left natural join diff_pairs
+        where abs_file_name = '/foo'
+        '''
+    )
+    rows = mock_manifest._cursor.fetchall()
+    assert len(rows) == 3
+    assert rows[-1]['abs_file_name'] == new_file
+    assert rows[-1]['sha'] == 'b33f2'
+    assert rows[-1]['base_sha'] == base_sha
+    assert rows[-1]['mtime'] == 100
+    assert rows[-1]['uid'] == 1000
+    assert rows[-1]['gid'] == 2000
+    assert rows[-1]['mode'] == 34622
+    assert rows[-1]['commit_timestamp'] == 1000
 
 
-def test_delete(mock_time, manifest):
-    manifest.delete(INITIAL_FILES[0])
-    assert set(manifest.contents.keys()) == set(INITIAL_FILES)
-    assert manifest.contents[INITIAL_FILES[0]][-1] == (1, None, False)
-    assert len(manifest.contents[INITIAL_FILES[0]]) == 2
-    assert len(manifest.contents[INITIAL_FILES[1]]) == 1
-    assert len(manifest.contents[INITIAL_FILES[2]]) == 1
+def test_delete(mock_manifest):
+    deleted_file = '/foo'
+    mock_manifest.delete(deleted_file)
+    mock_manifest._cursor.execute(
+        '''
+        select * from manifest left natural join diff_pairs
+        where abs_file_name = '/foo'
+        '''
+    )
+    rows = mock_manifest._cursor.fetchall()
+    assert len(rows) == 3
+    assert rows[-1]['abs_file_name'] == deleted_file
+    assert not rows[-1]['sha']
+    assert not rows[-1]['base_sha']
+    assert not rows[-1]['mtime']
+    assert not rows[-1]['uid']
+    assert not rows[-1]['gid']
+    assert not rows[-1]['mode']
+    assert rows[-1]['commit_timestamp'] == 1000
 
 
-def test_delete_unknown(mock_time, manifest):
-    old_contents = deepcopy(manifest.contents)
+def test_delete_unknown(mock_manifest, caplog):
     with mock.patch('backuppy.manifest.logger') as mock_logger:
-        manifest.delete('foo')
+        mock_manifest.delete('/not/backed/up')
+        mock_manifest._cursor.execute(
+            '''
+            select * from manifest left natural join diff_pairs
+            where abs_file_name = '/not/backed/up'
+            '''
+        )
+        rows = mock_manifest._cursor.fetchall()
         assert mock_logger.warn.call_count == 1
-        assert manifest.contents == old_contents
+        assert not rows
 
 
-def test_tracked_files(manifest):
-    assert manifest.files() == set(INITIAL_FILES)
+@pytest.mark.parametrize('timestamp', [60, 1000])
+def test_tracked_files(mock_manifest, timestamp):
+    expected = set(['/foo', '/bar'])
+    if timestamp < 100:
+        expected.add('/baz')
+    assert mock_manifest.files(timestamp) == expected
