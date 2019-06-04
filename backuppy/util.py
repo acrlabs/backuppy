@@ -4,14 +4,6 @@ from typing import List
 from typing import Pattern
 
 
-class EqualityMixin:  # pragma: no cover
-    def __eq__(self, other):
-        return other and self.__dict__ == other.__dict__
-
-    def __ne__(self, other):
-        return not (self == other)
-
-
 def compile_exclusions(exclusions: str) -> List[Pattern]:  # pragma: no cover
     return [re.compile(excl) for excl in exclusions]
 

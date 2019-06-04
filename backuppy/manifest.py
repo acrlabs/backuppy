@@ -1,4 +1,3 @@
-import os
 import sqlite3
 import time
 from typing import Optional
@@ -7,18 +6,15 @@ from typing import Tuple
 
 import colorlog
 
-from backuppy.util import EqualityMixin
-
 logger = colorlog.getLogger(__name__)
 
 
-class ManifestEntry(EqualityMixin):
+class ManifestEntry:
     def __init__(
         self,
         abs_file_name: str,
         sha: str,
         base_sha: Optional[str],
-        mtime: int,
         uid: int,
         gid: int,
         mode: int,
@@ -26,32 +22,13 @@ class ManifestEntry(EqualityMixin):
         self.abs_file_name = abs_file_name
         self.sha = sha
         self.base_sha = base_sha
-        self.mtime = mtime
         self.uid = uid
         self.gid = gid
         self.mode = mode
 
     @classmethod
-    def from_stat(
-        cls,
-        abs_file_name: str,
-        sha: str,
-        base_sha: Optional[str],
-        file_stat: os.stat_result,
-    ) -> 'ManifestEntry':
-        return cls(
-            abs_file_name,
-            sha,
-            base_sha,
-            int(file_stat.st_mtime),
-            file_stat.st_uid,
-            file_stat.st_gid,
-            file_stat.st_mode,
-        )
-
-    @classmethod
     def from_row(cls, row: sqlite3.Row) -> 'ManifestEntry':
-        return cls(row['abs_file_name'], row['sha'], row['base_sha'], row['mtime'], row['uid'], row['gid'], row['mode'])
+        return cls(row['abs_file_name'], row['sha'], row['base_sha'], row['uid'], row['gid'], row['mode'])
 
 
 DiffPair = Tuple[Optional[ManifestEntry], Optional[ManifestEntry]]
@@ -63,36 +40,24 @@ class Manifest:
     ::note: empty directories are ignored by the manifest
     """
 
-    def __init__(self, manifest_filename: str, start_new_manifest: bool):
+    def __init__(self, manifest_filename: str):
         """ Connect to a manifest file and optionally initialize a new database """
         self._conn = sqlite3.connect(manifest_filename)
         self._conn.set_trace_callback(logger.debug2)
         self._conn.row_factory = sqlite3.Row
         self._cursor = self._conn.cursor()
-        if start_new_manifest:
-            self._cursor.execute(
-                '''
-                create table manifest (
-                    abs_file_name text not null,
-                    sha text,
-                    mtime integer,
-                    uid integer,
-                    gid integer,
-                    mode integer,
-                    commit_timestamp integer not null
-                )
-                '''
-            )
-            self._cursor.execute(
-                '''
-                create table diff_pairs (
-                    sha text not null unique,
-                    base_sha text not null,
-                    foreign key(sha) references manifest(sha)
-                )
-                '''
-            )
-            self._cursor.execute('create index manifest_idx on manifest(abs_file_name, commit_timestamp)')
+        self.changed = False
+
+        self._cursor.execute(
+            '''
+            select name from sqlite_master
+            where type ='table' and name not like 'sqlite_%'
+            '''
+        )
+        rows = self._cursor.fetchall()
+        if {r['name'] for r in rows} != {'manifest', 'diff_pairs'}:
+            logger.info('This looks like a new manifest; initializing')
+            self._create_manifest_tables()
 
     def get_entry(self, abs_file_name: str, timestamp: Optional[int] = None) -> Optional[ManifestEntry]:
         """ Return a (base file, diff) pair which can be used to reconstruct the specified file
@@ -128,13 +93,12 @@ class Manifest:
         self._cursor.execute(
             '''
             insert into manifest
-            (abs_file_name, sha, mtime, uid, gid, mode, commit_timestamp)
-            values (?, ?, ?, ?, ?, ?, ?)
+            (abs_file_name, sha, uid, gid, mode, commit_timestamp)
+            values (?, ?, ?, ?, ?, ?)
             ''',
             (
                 entry.abs_file_name,
                 entry.sha,
-                entry.mtime,
                 entry.uid,
                 entry.gid,
                 entry.mode,
@@ -146,7 +110,7 @@ class Manifest:
                 'insert or ignore into diff_pairs (sha, base_sha) values (?, ?)',
                 (entry.sha, entry.base_sha),
             )
-        self._conn.commit()
+        self._commit()
 
     def delete(self, abs_file_name: str) -> None:
         """ Mark that a file has been deleted
@@ -166,7 +130,7 @@ class Manifest:
             'insert into manifest (abs_file_name, commit_timestamp) values (?, ?)',
             (abs_file_name, commit_timestamp),
         )
-        self._conn.commit()
+        self._commit()
 
     def files(self, timestamp: Optional[int] = None) -> Set[str]:
         """ Return all of the (currently-existing) files in the manifest """
@@ -180,3 +144,32 @@ class Manifest:
             (timestamp,),
         )
         return set(row['abs_file_name'] for row in self._cursor.fetchall())
+
+    def _commit(self):
+        self._conn.commit()
+        self.changed = True
+
+    def _create_manifest_tables(self):
+        self._cursor.execute(
+            '''
+            create table manifest (
+                abs_file_name text not null,
+                sha text,
+                uid integer,
+                gid integer,
+                mode integer,
+                commit_timestamp integer not null
+            )
+            '''
+        )
+        self._cursor.execute(
+            '''
+            create table diff_pairs (
+                sha text not null unique,
+                base_sha text not null,
+                foreign key(sha) references manifest(sha)
+            )
+            '''
+        )
+        self._cursor.execute('create index manifest_idx on manifest(abs_file_name, commit_timestamp)')
+        self._commit()

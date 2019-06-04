@@ -1,11 +1,14 @@
-.PHONY: test venv clean default
+.PHONY: test itest venv clean default
 
 default: venv
 
-test: requirements.txt requirements-dev.txt
+test:
 	tox
 
-venv: requirements.txt requirements-dev.txt
+itest:
+	tox -e itest
+
+venv:
 	tox -e venv
 
 clean:

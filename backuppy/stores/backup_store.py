@@ -10,7 +10,6 @@ import colorlog
 import staticconf
 
 from backuppy.blob import compute_sha_and_diff
-from backuppy.exceptions import FileChangedException
 from backuppy.exceptions import ManifestLockedException
 from backuppy.io import compute_sha
 from backuppy.io import io_copy
@@ -36,48 +35,46 @@ class BackupStore(metaclass=ABCMeta):
     def open_manifest(self) -> Iterator:
         unlocked_manifest_filename = f'.manifest.sqlite.{uuid4().hex}'
         logger.debug(f'Unlocked manifest located at {unlocked_manifest_filename}')
-        with IOIter(unlocked_manifest_filename) as manifest_file:
-            init_new_manifest = False
-            try:
-                self._load(MANIFEST_PATH, manifest_file)
-            except FileNotFoundError:
-                logger.info('This looks like a new backup location; initializing manifest')
-                init_new_manifest = True
-            self._manifest = Manifest(unlocked_manifest_filename, init_new_manifest)
+        with IOIter(unlocked_manifest_filename, check_mtime=False) as manifest_file:
+            self._load(MANIFEST_PATH, manifest_file)
+            self._manifest = Manifest(unlocked_manifest_filename)
 
             yield
 
-            self._manifest = None
-            try:
+            if self._manifest.changed:
                 self._save(MANIFEST_PATH, manifest_file, overwrite=True)
-            except FileChangedException:  # pragma: no cover
-                pass  # we expect the manifest file to have changed
+            else:
+                logger.info('No changes detected; nothing to do')
+            self._manifest = None
         os.remove(unlocked_manifest_filename)
 
     def save_if_new(self, abs_file_name: str) -> None:
         entry = self.manifest.get_entry(abs_file_name)
 
         with IOIter(abs_file_name) as new_file:
+            uid, gid, mode = new_file.stat().st_uid, new_file.stat().st_gid, new_file.stat().st_mode
             if not entry or not entry.sha:
                 logger.info(f'Saving a new copy of {abs_file_name}')
                 with IOIter() as new_file_copy:
                     new_sha = io_copy(new_file, new_file_copy)
-                    new_entry = ManifestEntry.from_stat(abs_file_name, new_sha, None, new_file.stat())
+                    new_entry = ManifestEntry(abs_file_name, new_sha, None, uid, gid, mode)
                     self.save(new_entry, new_file_copy)
                 return
 
             new_sha = compute_sha(new_file)
-            base_sha = entry.base_sha or entry.sha
-            new_entry = ManifestEntry.from_stat(abs_file_name, new_sha, base_sha, new_file.stat())
-            if entry != new_entry:
+            if new_sha != entry.sha:
+                logger.info(f'Saving a diff for {abs_file_name}')
+                base_sha = entry.base_sha or entry.sha
+                new_entry = ManifestEntry(abs_file_name, new_sha, base_sha, uid, gid, mode)
                 with IOIter() as orig_file, IOIter() as diff_file:
-                    logger.info(f'Saving a diff for {abs_file_name}')
                     orig_file = self.load(base_sha, orig_file)
                     new_sha, fd_diff = compute_sha_and_diff(orig_file, new_file, diff_file)
                     new_entry.sha = new_sha
-
-                    # the file hasn't been backed up before, or it's been deleted and re-created
                     self.save(new_entry, fd_diff)
+            elif uid != entry.uid or gid != entry.gid or mode != entry.mode:
+                logger.info(f'Saving changed metadata for {abs_file_name}')
+                new_entry = ManifestEntry(abs_file_name, entry.sha, entry.base_sha, uid, gid, mode)
+                self.manifest.insert_or_update(new_entry)
             else:
                 logger.info(f'{abs_file_name} is up to date!')
 

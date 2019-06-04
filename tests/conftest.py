@@ -23,7 +23,8 @@ def setup_logging_for_tests():
 def mock_open_streams():
     orig, new, diff = IOIter('/orig'), IOIter('/new'), IOIter('/diff')
     with mock.patch('builtins.open'), \
-            mock.patch('backuppy.io.Path'), \
+            mock.patch('backuppy.io.os.open'), \
+            mock.patch('backuppy.io.os.fdopen'), \
             mock.patch('backuppy.io.os.stat'), \
             orig, new, diff:
         orig.block_size = new.block_size = diff.block_size = 2

@@ -1,6 +1,7 @@
 import gzip
 from typing import Callable
 
+import colorlog
 import staticconf
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives.ciphers import Cipher
@@ -9,6 +10,7 @@ from cryptography.hazmat.primitives.ciphers.modes import OFB
 
 from backuppy.io import IOIter
 
+logger = colorlog.getLogger(__name__)
 GZIP_START = b'\x1f\x8b'
 
 
@@ -30,8 +32,13 @@ def compress_and_encrypt(input_file: IOIter, output_file: IOIter, key: bytes, iv
         else identity
     )
     writer = output_file.writer(); next(writer)
+    logger.debug2('starting to compress')
     for block in input_file.reader():
-        writer.send(encrypt_fn(zip_fn(block)))
+        block = zip_fn(block)
+        logger.debug2(f'zip_fn returned {len(block)} bytes')
+        block = encrypt_fn(block)
+        logger.debug2(f'encrypt_fn returned {len(block)} bytes')
+        writer.send(block)
 
 
 def decrypt_and_unpack(input_file: IOIter, output_file: IOIter, key: bytes, iv: bytes) -> None:
@@ -49,6 +56,7 @@ def decrypt_and_unpack(input_file: IOIter, output_file: IOIter, key: bytes, iv: 
     writer = output_file.writer(); next(writer)
     for block in input_file.reader():
         decrypted_data += decrypt_fn(block)
+        logger.debug2(f'decrypt_fn returned {len(decrypted_data)} bytes')
 
         # gzip.decompress throws an EOFError if we pass in partial data, so here we need to
         # decompress each GZIP'ed member individually; to find a complete member we look for
@@ -57,13 +65,16 @@ def decrypt_and_unpack(input_file: IOIter, output_file: IOIter, key: bytes, iv: 
             index = decrypted_data.find(GZIP_START, 2)
             if index != -1:
                 block = gzip.decompress(decrypted_data[:index])
+                logger.debug2(f'unzip_fn returned {len(block)} bytes')
                 writer.send(block)
                 decrypted_data = decrypted_data[index:]
         else:
+            logger.debug2(f'unzip_fn returned {len(decrypted_data)} bytes')
             writer.send(decrypted_data)
             decrypted_data = b''
 
     # Decompress and write out the last block
     if decrypted_data:
         block = gzip.decompress(decrypted_data) if staticconf.read_bool('use_compression') else decrypted_data
+        logger.debug2(f'unzip_fn returned {len(block)} bytes')
         writer.send(block)

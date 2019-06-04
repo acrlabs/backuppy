@@ -24,10 +24,8 @@ def subparser(command: str, help: str, entrypoint: Callable) -> Callable:  # pra
     def decorator(add_args):
         def wrapper(subparser):
             subparser = subparser.add_parser(command, formatter_class=CustomHelpFormatter, add_help=False)
-            required_named_args = subparser.add_argument_group('required arguments')
-            optional_named_args = subparser.add_argument_group('optional arguments')
-            add_args(subparser, required_named_args, optional_named_args)
-            optional_named_args.add_argument('-h', '--help', action='help', help='show this message and exit')
+            add_args(subparser)
+            subparser.add_argument('-h', '--help', action='help', help='show this message and exit')
             subparser.set_defaults(entrypoint=entrypoint)
         return wrapper
     return decorator

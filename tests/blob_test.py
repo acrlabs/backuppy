@@ -74,7 +74,7 @@ def test_compute_sha_and_diff_del(mock_open_streams, sha_fn):
     new._fd.seek(0)
     sha_fn.update(new._fd.getvalue())
     sha, diff = compute_sha_and_diff(orig, new, diff)
-    assert diff._fd.getvalue() == b'@0|D2|\n'
+    assert diff._fd.getvalue() == b'@0|D2|'
     assert sha == sha_fn.hexdigest()
 
 
@@ -85,7 +85,7 @@ def test_compute_sha_and_diff_ins(mock_open_streams, sha_fn):
     new._fd.seek(0)
     sha_fn.update(new._fd.getvalue())
     sha, diff = compute_sha_and_diff(orig, new, diff)
-    assert diff._fd.getvalue() == b'@2|I2|as\n'
+    assert diff._fd.getvalue() == b'@2|I2|as'
     assert sha == sha_fn.hexdigest()
 
 
@@ -95,7 +95,7 @@ def test_compute_sha_and_diff_repl(mock_open_streams, sha_fn):
     new._fd.seek(0)
     sha_fn.update(new._fd.getvalue())
     sha, diff = compute_sha_and_diff(orig, new, diff)
-    assert diff._fd.getvalue() == b'@2|X2|xy\n'
+    assert diff._fd.getvalue() == b'@2|X2|xy'
     assert sha == sha_fn.hexdigest()
 
 
@@ -105,7 +105,7 @@ def test_compute_sha_and_diff_orig_long(mock_open_streams, sha_fn):
     new._fd.seek(0)
     sha_fn.update(new._fd.getvalue())
     sha, diff = compute_sha_and_diff(orig, new, diff)
-    assert diff._fd.getvalue() == b'@1|D1|\n@2|D2|\n@4|D2|\n@6|D2|\n@8|D1|\n'
+    assert diff._fd.getvalue() == b'@1|D1|@2|D2|@4|D2|@6|D2|@8|D1|'
     assert sha == sha_fn.hexdigest()
 
 
@@ -115,5 +115,5 @@ def test_compute_sha_and_diff_new_long(mock_open_streams, sha_fn):
     new._fd.seek(0)
     sha_fn.update(new._fd.getvalue())
     sha, diff = compute_sha_and_diff(orig, new, diff)
-    assert diff._fd.getvalue() == b'@9|I1|s\n@10|I2|df\n@12|I1|a\n'
+    assert diff._fd.getvalue() == b'@9|I1|s@10|I2|df@12|I1|a'
     assert sha == sha_fn.hexdigest()

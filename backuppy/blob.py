@@ -45,12 +45,13 @@ def apply_diff(orig_file: IOIter, diff_file: IOIter, new_file: IOIter) -> None:
             if len(remainder) < contents_len and action != DEL:
                 break
             contents = b'' if action == DEL else remainder[:contents_len]
-            diff = remainder if action == DEL else remainder[contents_len + 1:]
+            diff = remainder if action == DEL else remainder[contents_len:]
             if action == DEL:
                 orig_file.fd.seek(contents_len, 1)
+                offset -= contents_len
             elif action == INS:
                 writer.send(contents)
-                offset += len(contents)
+                offset += contents_len
             elif action == REPL:
                 writer.send(contents)
                 orig_file.fd.seek(contents_len, 1)
@@ -99,7 +100,7 @@ def compute_sha_and_diff(orig_file: IOIter, new_file: IOIter, diff_file: IOIter)
                 local_pos -= num
             else:  # can only hit this case if new_bytes is not None
                 contents = new_bytes[local_pos - num:local_pos]
-            diff += f'{num}'.encode('utf-8') + SEP + contents + b'\n'
+            diff += f'{num}'.encode('utf-8') + SEP + contents
         writer.send(diff)
         pos += orig_file.block_size
 
