@@ -15,15 +15,15 @@ GZIP_START = b'\x1f\x8b'
 
 
 def identity(x: bytes, y: int = 0) -> bytes:
-    # y is to maintain compatibility with gzip.compress
+    # y is to maintain typing compatibility with gzip.compress
     return x
 
 
 def compress_and_encrypt(input_file: IOIter, output_file: IOIter, key: bytes, iv: bytes) -> None:
     """ Read data from an open file descriptor, and write the compressed, encrypted data to another file descriptor
 
-    :param fd_in: an open plaintext file descriptor in 'rb' mode to read data from
-    :param fd_out: an open file descriptor in 'wb' mode to write compressed ciphertext to
+    :param input_file: an IOIter object to read plaintext data from
+    :param output_file: an IOIter object to write compressed ciphertext to
     """
     zip_fn: Callable[[bytes], bytes] = gzip.compress if staticconf.read_bool('use_compression') else identity
     encrypt_fn: Callable[[bytes], bytes] = (
@@ -44,8 +44,8 @@ def compress_and_encrypt(input_file: IOIter, output_file: IOIter, key: bytes, iv
 def decrypt_and_unpack(input_file: IOIter, output_file: IOIter, key: bytes, iv: bytes) -> None:
     """ Read encrypted, GZIPed data from an open file descriptor, and write the decoded data to another file descriptor
 
-    :param fd_in: an open file descriptor in 'rb' mode to read ciphertext from
-    :param fd_out: an open file descriptor in 'wb' mode to write uncompressed plaintext to
+    :param input_file: an IOIter object to read compressed ciphertext from
+    :param output_file: an IOIter object to write plaintext data to
     """
     decrypted_data = b''
     decrypt_fn: Callable[[bytes], bytes] = (

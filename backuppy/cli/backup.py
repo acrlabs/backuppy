@@ -16,7 +16,12 @@ logger = colorlog.getLogger(__name__)
 
 
 def _scan_directory(abs_base_path: str, backup_store: BackupStore, exclusions: List[Pattern]) -> None:
-    """ scan a directory looking for changes from the manifest """
+    """ scan a directory looking for changes from the manifest
+
+    :param abs_base_path: the root of the directory to scan
+    :param backup_store: the BackupStore object that should be used to back up the directory
+    :param exclusions: a list of files to ignore during backup
+    """
     backup_store.manifest.files()
     marked_files = set()
     for abs_file_name in file_walker(abs_base_path, logger.warning):
@@ -46,12 +51,15 @@ def _scan_directory(abs_base_path: str, backup_store: BackupStore, exclusions: L
 
 
 def main(args: argparse.Namespace):
+    """ entry point for the 'backup' subcommand """
     staticconf.YamlConfiguration(args.config, flatten=False)
     global_exclusions = compile_exclusions(staticconf.read_list('exclusions', []))
+
     for backup_name, backup_config in staticconf.read('backups').items():
         staticconf.DictConfiguration(backup_config, namespace=backup_name)
         logger.info(f'Starting backup for {backup_name}')
         backup_store = get_backup_store(backup_name)
+
         for base_path in staticconf.read_list('directories', namespace=backup_name):
             abs_base_path = os.path.abspath(base_path)
             local_exclusions = compile_exclusions(staticconf.read_list('exclusions', [], namespace=backup_name))
@@ -61,7 +69,7 @@ def main(args: argparse.Namespace):
         logger.info(f'Backup for {backup_name} finished')
 
 
-@subparser('backup', 'perform a backup of all configuration locations', main)
+@subparser('backup', 'perform a backup of all configured locations', main)
 def add_backup_parser(subparser) -> None:  # pragma: no cover
     subparser.add_argument(
         '--config',

@@ -14,7 +14,7 @@ class CustomHelpFormatter(argparse.ArgumentDefaultsHelpFormatter):  # pragma: no
         super().__init__(prog, max_help_position=35, width=100)
 
 
-def subparser(command: str, help: str, entrypoint: Callable) -> Callable:  # pragma: no cover
+def subparser(command: str, description: str, entrypoint: Callable) -> Callable:  # pragma: no cover
     """ Function decorator to simplify adding arguments to subcommands
 
     :param command: name of the subcommand to add
@@ -23,7 +23,12 @@ def subparser(command: str, help: str, entrypoint: Callable) -> Callable:  # pra
     """
     def decorator(add_args):
         def wrapper(subparser):
-            subparser = subparser.add_parser(command, formatter_class=CustomHelpFormatter, add_help=False)
+            subparser = subparser.add_parser(
+                command,
+                formatter_class=CustomHelpFormatter,
+                description=description,
+                add_help=False,
+            )
             add_args(subparser)
             subparser.add_argument('-h', '--help', action='help', help='show this message and exit')
             subparser.set_defaults(entrypoint=entrypoint)
@@ -53,6 +58,9 @@ def parse_args(description: str) -> argparse.Namespace:  # pragma: no cover
         action='version',
         version='backuppy' + __version__
     )
+
+    # Top-level arguments because if a backup has been performed with encryption/compression
+    # enabled, they can't be disabled later (or when doing a restore)
     root_parser.add_argument(
         '--disable-compression',
         action='store_true',

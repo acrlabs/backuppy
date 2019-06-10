@@ -15,9 +15,11 @@ logger = colorlog.getLogger(__name__)
 
 
 class LocalBackupStore(BackupStore):
+    """ Back up files to a local (on-disk) location """
+
     def __init__(self, backup_name):
         super().__init__(backup_name)
-        self.backup_location = os.path.abspath(self.config.read_string('location'))
+        self.backup_location = os.path.abspath(self.config.read_string('protocol.location'))
 
     def _save(self, path: str, tmpfile: IOIter, overwrite: bool = False) -> None:
         abs_backup_path = path_join(self.backup_location, path)

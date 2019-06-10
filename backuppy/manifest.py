@@ -28,6 +28,7 @@ class ManifestEntry:
 
     @classmethod
     def from_row(cls, row: sqlite3.Row) -> 'ManifestEntry':
+        """ Helper function to construct a ManifestEntry from the database """
         return cls(row['abs_file_name'], row['sha'], row['base_sha'], row['uid'], row['gid'], row['mode'])
 
 
@@ -64,7 +65,7 @@ class Manifest:
 
         :param abs_file_name: the name of the file to reconstruct
         :param timestamp: the point in time for which we want to reconstruct the file
-        :returns: a DiffPair object
+        :returns: the contents of the database corresponding to the requested filename at the specified time
         """
 
         timestamp = timestamp or int(time.time())
@@ -133,7 +134,7 @@ class Manifest:
         self._commit()
 
     def files(self, timestamp: Optional[int] = None) -> Set[str]:
-        """ Return all of the (currently-existing) files in the manifest """
+        """ Return all of the (currently-existing) files in the manifest at or before the specified time """
         timestamp = timestamp or int(time.time())
         self._cursor.execute(
             '''
@@ -146,10 +147,12 @@ class Manifest:
         return set(row['abs_file_name'] for row in self._cursor.fetchall())
 
     def _commit(self):
+        """ Commit the data to the database, and mark that the database has changed """
         self._conn.commit()
         self.changed = True
 
     def _create_manifest_tables(self):
+        """ Initialize a new manifest """
         self._cursor.execute(
             '''
             create table manifest (

@@ -10,7 +10,7 @@ __all__ = [
 
 
 def get_backup_store(backup_name):  # pragma: no cover
-    protocol = staticconf.read_string('protocol', namespace=backup_name)
+    protocol = staticconf.read_string('protocol.type', namespace=backup_name)
     if protocol == 'local':
         return LocalBackupStore(backup_name)
     elif protocol == 'ssh':

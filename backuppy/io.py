@@ -17,12 +17,19 @@ O_BINARY = getattr(os, 'O_BINARY', 0x0)  # O_BINARY only available on windows
 
 
 class IOIter:
+    """ Wrapper around file IO operations that automates SHA computations """
+
     def __init__(
         self,
         filename: Optional[str] = None,
         block_size: int = BLOCK_SIZE,
         check_mtime: bool = True,
     ) -> None:
+        """
+        :param filename: the name of the file to operate on; if None, the IOIter will wrap a TemporaryFile
+        :param block_size: how much data to read or write at a time
+        :param check_mtime: watch the mtime of the file to see if it's changed while open
+        """
         self.filename = filename
         self.block_size = block_size
         self._fd: Optional[IO[bytes]] = None
@@ -31,7 +38,38 @@ class IOIter:
         self._should_check_mtime = check_mtime
         self._mtime: Optional[int] = None
 
+    def __enter__(self) -> 'IOIter':
+        """ Context manager function to open the file (the file will be created if it doesn't exist)
+
+        :returns: self, as a convenience
+        :raises: DoubleBufferError if you try to nest the context managers
+        """
+        if self._fd:
+            raise DoubleBufferError(f'Buffer for {self.filename} is open twice')
+        if self.filename:
+            fd = os.open(self.filename, os.O_CREAT | os.O_RDWR | O_BINARY, mode=0o600)
+            self._fd = os.fdopen(fd, 'r+b')
+            self._mtime = int(self.stat().st_mtime)
+        else:
+            self._fd = TemporaryFile(self._mode)
+        self.fd.seek(0)
+        return self
+
+    def __exit__(self, type, value, traceback):
+        """ Context manager cleanup; closes the file """
+        self._fd.close()
+        self._fd = None
+        self._mtime = None
+
     def reader(self, end: Optional[int] = None, reset_pos: bool = True) -> Generator[bytes, None, None]:
+        """ Iterator for reading the contents of a file
+
+        This generator will fail with a BufferError unless inside a with IOIter(...) block
+
+        :param end: the ending position to read until
+        :param reset_pos: True to seek to the beginning of the file first, false otherwise
+        :returns: data for the file in self.block_size chunks
+        """
         if reset_pos:
             self.fd.seek(0)
         self._sha_fn = sha256()
@@ -50,6 +88,10 @@ class IOIter:
             self.fd.seek(0)
 
     def writer(self) -> Generator[None, bytes, None]:
+        """ Iterator for writing to a file; the file is truncated to 0 bytes first
+
+        This generator will fail with a BufferError unless inside a with IOIter(...) block
+        """
         self.fd.truncate()
         self._sha_fn = sha256()
         while True:
@@ -59,35 +101,27 @@ class IOIter:
             logger.debug2(f'wrote {bytes_written} bytes to {self.filename}')
             self.fd.flush()
 
-    def __enter__(self) -> 'IOIter':
-        if self._fd:
-            raise DoubleBufferError(f'Buffer for {self.filename} is open twice')
-        if self.filename:
-            fd = os.open(self.filename, os.O_CREAT | os.O_RDWR | O_BINARY, mode=0o600)
-            self._fd = os.fdopen(fd, 'r+b')
-            self._mtime = int(self.stat().st_mtime)
-        else:
-            self._fd = TemporaryFile(self._mode)
-        self.fd.seek(0)
-        return self
-
-    def __exit__(self, type, value, traceback):
-        self._fd.close()
-        self._fd = None
-        self._mtime = None
-
     def sha(self) -> str:
+        """ Return the sha of all data that has been read or written to the file """
         if not self._sha_fn:
             raise BufferError('No SHA has been computed')
         return self._sha_fn.hexdigest()
 
     def stat(self) -> os.stat_result:
+        """ Return a stat struct for the file """
         if self.filename:
             return os.stat(self.filename)
         else:
             raise BufferError('No stat for temporary file')
 
     def _check_mtime(self) -> None:
+        """ Check to see if the file has been modified during writing (this isn't guaranteed to
+        be correct, because there are other ways to set the mtime to make it look like the file
+        hasn't been modified, but it should be fine for most things).
+
+        :raises BufferError: if we're not inside a with IOIter(...) block
+        :raises FileChangedException: if the mtime has changed since we entered the context-managed block
+        """
         if self.filename and self._should_check_mtime:
             if not self._mtime:
                 raise BufferError(f"{self.filename} is missing an mtime; probably it hasn't been opened")
@@ -97,18 +131,30 @@ class IOIter:
 
     @property
     def fd(self):
+        """ Wrapper around the file object
+
+        :raises BufferError: if the file object is accessed outside a with IOIter(...) block
+        """
         if not self._fd:
             raise BufferError('No file is open')
         return self._fd
 
 
 def compute_sha(file1: IOIter) -> str:
+    """ Helper function for computing the sha of an IOIter; just reads the data and discards it
+
+    :returns: the sha256sum of the file
+    """
     for data in file1.reader():
         pass
     return file1.sha()
 
 
 def io_copy(file1: IOIter, file2: IOIter) -> str:
+    """ Helper function to copy data from one IOIter to another
+
+    :returns: the sha256sum of the copied data
+    """
     writer = file2.writer(); next(writer)
     for data in file1.reader():
         writer.send(data)

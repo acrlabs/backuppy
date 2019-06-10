@@ -14,7 +14,7 @@ from tests.conftest import count_matching_log_lines
 def mock_backup_store():
     backup_name = 'fake_backup'
     with mock.patch('backuppy.stores.local_backup_store.BackupStore'), \
-            staticconf.testing.PatchConfiguration({'location': '/fake/path'}, namespace=backup_name):
+            staticconf.testing.PatchConfiguration({'protocol': {'location': '/fake/path'}}, namespace=backup_name):
         yield LocalBackupStore(backup_name)
 
 
