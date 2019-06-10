@@ -14,7 +14,10 @@ from tests.conftest import count_matching_log_lines
 def mock_backup_store():
     backup_name = 'fake_backup'
     with mock.patch('backuppy.stores.local_backup_store.BackupStore'), \
-            staticconf.testing.PatchConfiguration({'protocol': {'location': '/fake/path'}}, namespace=backup_name):
+            staticconf.testing.PatchConfiguration(
+                {'protocol': {'location': '/fake/path'}},
+                namespace=backup_name
+    ):
         yield LocalBackupStore(backup_name)
 
 
@@ -36,7 +39,11 @@ def test_save(caplog, mock_backup_store, overwrite):
         mock_backup_store._save('/asdf/bar', mock.Mock(), overwrite)
     assert os.path.exists('/fake/path/foo')
     with open('/fake/path/foo', 'r') as f:
-        assert f.read() == ('xXx SECRET ENCRYPTED CONTENT xXx' if overwrite else 'old boring content')
+        assert f.read() == (
+            'xXx SECRET ENCRYPTED CONTENT xXx'
+            if overwrite
+            else 'old boring content'
+        )
     assert os.path.exists('/fake/path/asdf/bar')
     with open('/fake/path/asdf/bar', 'r') as f:
         assert f.read() == 'xXx SECRET ENCRYPTED CONTENT xXx'

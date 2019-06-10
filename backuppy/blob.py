@@ -82,13 +82,17 @@ def apply_diff(orig_file: IOIter, diff_file: IOIter, new_file: IOIter) -> None:
     if diff:
         raise DiffParseError(f'Un-parseable diff: {diff}')
 
-    # If we get here and there's still data in the original file, it must be equal to
-    # what was in the new file, so just copy any remaining data from the original file to the new file
+    # If we get here and there's still data in the original file, it must be equal to what was in
+    # the new file, so just copy any remaining data from the original file to the new file
     for data in orig_file.reader(end=orig_file.stat().st_size, reset_pos=False):
         writer.send(data)
 
 
-def compute_sha_and_diff(orig_file: IOIter, new_file: IOIter, diff_file: IOIter) -> Tuple[str, IOIter]:
+def compute_sha_and_diff(
+    orig_file: IOIter,
+    new_file: IOIter,
+    diff_file: IOIter,
+) -> Tuple[str, IOIter]:
     """ Given an open original file and a new file, compute the diff between the two
 
     :param orig_file: an IOIter object whose contents are the "original" data
@@ -104,9 +108,11 @@ def compute_sha_and_diff(orig_file: IOIter, new_file: IOIter, diff_file: IOIter)
         elif not new_bytes:
             steps = [(len(orig_bytes), Token.DEL)]
         else:
-            # Reverse the order of new_contents and old_contents since edlib outputs the cigar w.r.t. the 2nd arg
+            # Reverse the order of new_contents and old_contents since edlib outputs the cigar
+            # w.r.t. the 2nd arg
             result = edlib.align(new_bytes, orig_bytes, task='path')
-            steps = [(int(n), c.encode('utf-8')) for n, c in re.findall(r'(\d+)([=DIX])', result['cigar'])]
+            steps = [(int(n), c.encode('utf-8'))
+                     for n, c in re.findall(r'(\d+)([=DIX])', result['cigar'])]
 
         local_pos, diff = 0, b''
         for num, action in steps:

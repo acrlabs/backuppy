@@ -11,7 +11,7 @@ from backuppy.crypto import decrypt_and_unpack
 from tests.conftest import count_matching_log_lines
 
 # THIS KEY AND NONCE FOR DEBUGGING ONLY; DO NOT USE FOR REAL DATA!!!
-TEMP_AES_KEY = b'\xc8\x7fY\x1e\x963i\xf2cph\xc6\x99\xfdZ\xad4<\xa7\x83\xe5\xf0Z\x8c\xa2\xb2\xfa\xb7\xd8\x15}\xc2'
+TEMP_AES_KEY = b'\xc8\x7fY\x1e\x963i\xf2cph\xc6\x99\xfdZ\xad4<\xa7\x83\xe5\xf0Z\x8c\xa2\xb2\xfa\xb7\xd8\x15}\xc2'  # noqa
 TEMP_IV = b'1234567812341234'
 
 

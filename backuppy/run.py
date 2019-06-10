@@ -28,7 +28,8 @@ def setup_logging(log_level_str: str = 'info') -> None:
     setattr(logging, 'debug2', root_log_fn)
 
     handler = colorlog.StreamHandler()
-    handler.setFormatter(colorlog.ColoredFormatter('%(log_color)s%(levelname)s:%(name)s:%(message)s'))
+    handler.setFormatter(colorlog.ColoredFormatter(
+        '%(log_color)s%(levelname)s:%(name)s:%(message)s'))
     logger = colorlog.getLogger()
     logger.addHandler(handler)
 

@@ -26,7 +26,8 @@ class IOIter:
         check_mtime: bool = True,
     ) -> None:
         """
-        :param filename: the name of the file to operate on; if None, the IOIter will wrap a TemporaryFile
+        :param filename: the name of the file to operate on; if None, the IOIter will wrap a
+            TemporaryFile
         :param block_size: how much data to read or write at a time
         :param check_mtime: watch the mtime of the file to see if it's changed while open
         """
@@ -61,7 +62,11 @@ class IOIter:
         self._fd = None
         self._mtime = None
 
-    def reader(self, end: Optional[int] = None, reset_pos: bool = True) -> Generator[bytes, None, None]:
+    def reader(
+        self,
+        end: Optional[int] = None,
+        reset_pos: bool = True,
+    ) -> Generator[bytes, None, None]:
         """ Iterator for reading the contents of a file
 
         This generator will fail with a BufferError unless inside a with IOIter(...) block
@@ -120,14 +125,17 @@ class IOIter:
         hasn't been modified, but it should be fine for most things).
 
         :raises BufferError: if we're not inside a with IOIter(...) block
-        :raises FileChangedException: if the mtime has changed since we entered the context-managed block
+        :raises FileChangedException: if the mtime has changed since we entered the context-managed
+            block
         """
         if self.filename and self._should_check_mtime:
             if not self._mtime:
-                raise BufferError(f"{self.filename} is missing an mtime; probably it hasn't been opened")
+                raise BufferError(
+                    f"{self.filename} is missing an mtime; probably it hasn't been opened")
             mtime = int(self.stat().st_mtime)
             if mtime != self._mtime:
-                raise FileChangedException(f'{self.filename} changed while reading; {mtime} != {self._mtime}')
+                raise FileChangedException(
+                    f'{self.filename} changed while reading; {mtime} != {self._mtime}')
 
     @property
     def fd(self):

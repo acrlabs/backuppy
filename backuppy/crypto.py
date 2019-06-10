@@ -20,12 +20,14 @@ def identity(x: bytes, y: int = 0) -> bytes:
 
 
 def compress_and_encrypt(input_file: IOIter, output_file: IOIter, key: bytes, iv: bytes) -> None:
-    """ Read data from an open file descriptor, and write the compressed, encrypted data to another file descriptor
+    """ Read data from an open file descriptor, and write the compressed, encrypted data to another
+    file descriptor
 
     :param input_file: an IOIter object to read plaintext data from
     :param output_file: an IOIter object to write compressed ciphertext to
     """
-    zip_fn: Callable[[bytes], bytes] = gzip.compress if staticconf.read_bool('use_compression') else identity
+    zip_fn: Callable[[bytes], bytes] = gzip.compress if staticconf.read_bool(
+        'use_compression') else identity
     encrypt_fn: Callable[[bytes], bytes] = (
         Cipher(AES(key), OFB(iv), backend=default_backend()).encryptor().update
         if staticconf.read_bool('use_encryption')
@@ -42,7 +44,8 @@ def compress_and_encrypt(input_file: IOIter, output_file: IOIter, key: bytes, iv
 
 
 def decrypt_and_unpack(input_file: IOIter, output_file: IOIter, key: bytes, iv: bytes) -> None:
-    """ Read encrypted, GZIPed data from an open file descriptor, and write the decoded data to another file descriptor
+    """ Read encrypted, GZIPed data from an open file descriptor, and write the decoded data to
+    another file descriptor
 
     :param input_file: an IOIter object to read compressed ciphertext from
     :param output_file: an IOIter object to write plaintext data to
@@ -75,6 +78,7 @@ def decrypt_and_unpack(input_file: IOIter, output_file: IOIter, key: bytes, iv: 
 
     # Decompress and write out the last block
     if decrypted_data:
-        block = gzip.decompress(decrypted_data) if staticconf.read_bool('use_compression') else decrypted_data
+        block = gzip.decompress(decrypted_data) if staticconf.read_bool(
+            'use_compression') else decrypted_data
         logger.debug2(f'unzip_fn returned {len(block)} bytes')
         writer.send(block)

@@ -29,7 +29,14 @@ class ManifestEntry:
     @classmethod
     def from_row(cls, row: sqlite3.Row) -> 'ManifestEntry':
         """ Helper function to construct a ManifestEntry from the database """
-        return cls(row['abs_file_name'], row['sha'], row['base_sha'], row['uid'], row['gid'], row['mode'])
+        return cls(
+            row['abs_file_name'],
+            row['sha'],
+            row['base_sha'],
+            row['uid'],
+            row['gid'],
+            row['mode'],
+        )
 
 
 DiffPair = Tuple[Optional[ManifestEntry], Optional[ManifestEntry]]
@@ -60,12 +67,17 @@ class Manifest:
             logger.info('This looks like a new manifest; initializing')
             self._create_manifest_tables()
 
-    def get_entry(self, abs_file_name: str, timestamp: Optional[int] = None) -> Optional[ManifestEntry]:
+    def get_entry(
+        self,
+        abs_file_name: str,
+        timestamp: Optional[int] = None,
+    ) -> Optional[ManifestEntry]:
         """ Return a (base file, diff) pair which can be used to reconstruct the specified file
 
         :param abs_file_name: the name of the file to reconstruct
         :param timestamp: the point in time for which we want to reconstruct the file
-        :returns: the contents of the database corresponding to the requested filename at the specified time
+        :returns: the contents of the database corresponding to the requested filename at the
+            specified time
         """
 
         timestamp = timestamp or int(time.time())
@@ -134,7 +146,11 @@ class Manifest:
         self._commit()
 
     def files(self, timestamp: Optional[int] = None) -> Set[str]:
-        """ Return all of the (currently-existing) files in the manifest at or before the specified time """
+        """ Return all of the (currently-existing) files in the manifest at or before the
+        specified time
+
+        :param timestamp: the most recent commit timestamp to consider in the manifest
+        """
         timestamp = timestamp or int(time.time())
         self._cursor.execute(
             '''
@@ -174,5 +190,6 @@ class Manifest:
             )
             '''
         )
-        self._cursor.execute('create index manifest_idx on manifest(abs_file_name, commit_timestamp)')
+        self._cursor.execute(
+            'create index manifest_idx on manifest(abs_file_name, commit_timestamp)')
         self._commit()

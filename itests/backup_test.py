@@ -102,7 +102,8 @@ def backup_itest_wrapper(*dec_args):
                         if not row or not row[1]:
                             assert n.fd.read() == latest.contents
                         else:
-                            orig_file_path = os.path.join(BACKUP_DIR, row[1][:2], row[1][2:4], row[1][4:])
+                            orig_file_path = os.path.join(
+                                BACKUP_DIR, row[1][:2], row[1][2:4], row[1][4:])
                             with IOIter(orig_file_path) as o, IOIter() as tmp:
                                 apply_diff(o, n, tmp)
                                 tmp.fd.seek(0)

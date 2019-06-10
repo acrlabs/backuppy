@@ -15,7 +15,11 @@ from backuppy.util import file_walker
 logger = colorlog.getLogger(__name__)
 
 
-def _scan_directory(abs_base_path: str, backup_store: BackupStore, exclusions: List[Pattern]) -> None:
+def _scan_directory(
+    abs_base_path: str,
+    backup_store: BackupStore,
+    exclusions: List[Pattern],
+) -> None:
     """ scan a directory looking for changes from the manifest
 
     :param abs_base_path: the root of the directory to scan
@@ -27,9 +31,10 @@ def _scan_directory(abs_base_path: str, backup_store: BackupStore, exclusions: L
     for abs_file_name in file_walker(abs_base_path, logger.warning):
 
         # Skip files that match any of the specified regular expressions
-        matched_patterns = [pattern.pattern for pattern in exclusions if pattern.search(abs_file_name)]
+        matched_patterns = [
+            pattern.pattern for pattern in exclusions if pattern.search(abs_file_name)]
         if matched_patterns:
-            logger.info(f'{abs_file_name} matched exclusion pattern(s) "{matched_patterns}"; skipping')
+            logger.info(f'{abs_file_name} matched exclusion(s) "{matched_patterns}"; skipping')
             continue
 
         # Mark the file as "seen" so it isn't deleted later
@@ -38,8 +43,8 @@ def _scan_directory(abs_base_path: str, backup_store: BackupStore, exclusions: L
         try:
             backup_store.save_if_new(abs_file_name)
         except Exception as e:
-            # We never want to hard-fail a backup just because one file crashed; we'd rather back up as much
-            # as we can, and log the failures for further investigation
+            # We never want to hard-fail a backup just because one file crashed; we'd rather back up
+            # as much as we can, and log the failures for further investigation
             logger.exception(f'There was a problem backing up {abs_file_name}: {str(e)}; skipping')
             continue
 
@@ -62,7 +67,8 @@ def main(args: argparse.Namespace):
 
         for base_path in staticconf.read_list('directories', namespace=backup_name):
             abs_base_path = os.path.abspath(base_path)
-            local_exclusions = compile_exclusions(staticconf.read_list('exclusions', [], namespace=backup_name))
+            local_exclusions = compile_exclusions(
+                staticconf.read_list('exclusions', [], namespace=backup_name))
             exclusions = global_exclusions + local_exclusions
             with backup_store.open_manifest():
                 _scan_directory(abs_base_path, backup_store, exclusions)

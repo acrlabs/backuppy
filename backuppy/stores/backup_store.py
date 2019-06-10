@@ -35,7 +35,8 @@ class BackupStore(metaclass=ABCMeta):
         methods for this class are common across different types of stores, and are what establish
         many of the "safety" guarantees of backuppy.
 
-        :param backup_name: the name of the backup this store corresponds to in the configuration file
+        :param backup_name: the name of the backup this store corresponds to in the
+            configuration file
         """
         self.backup_name = backup_name
         self.config = staticconf.NamespaceReaders(backup_name)
@@ -55,10 +56,12 @@ class BackupStore(metaclass=ABCMeta):
         unlocked_manifest_filename = f'.manifest.sqlite.{uuid4().hex}'
         logger.debug(f'Unlocked manifest located at {unlocked_manifest_filename}')
 
-        # We expect the manifest file to change since it will get committed after each file is backed up
+        # We expect the manifest file to change since it will get committed after each file is
+        # backed up
         try:
             with IOIter(unlocked_manifest_filename, check_mtime=False) as manifest_file:
-                # Call the _load function directly (instead of load) because the manifest filename isn't a SHA
+                # Call the _load function directly (instead of load) because the manifest filename
+                # isn't a SHA
                 self._load(MANIFEST_PATH, manifest_file)
                 self._manifest = Manifest(unlocked_manifest_filename)
 
@@ -83,7 +86,8 @@ class BackupStore(metaclass=ABCMeta):
         with IOIter(abs_file_name) as new_file:
             uid, gid, mode = new_file.stat().st_uid, new_file.stat().st_gid, new_file.stat().st_mode
 
-            # If the file hasn't been backed up before, or if it's been deleted previously, save a new copy
+            # If the file hasn't been backed up before, or if it's been deleted previously, save a
+            # new copy
             if not entry or not entry.sha:
                 logger.info(f'Saving a new copy of {abs_file_name}')
                 with IOIter() as new_file_copy:
@@ -111,7 +115,8 @@ class BackupStore(metaclass=ABCMeta):
                     new_entry.sha = new_sha
                     self.save(new_entry, fd_diff)
 
-            # If the sha is the same but metadata on the file has changed, we just store the updated metadata
+            # If the sha is the same but metadata on the file has changed, we just store the updated
+            # metadata
             elif uid != entry.uid or gid != entry.gid or mode != entry.mode:
                 logger.info(f'Saving changed metadata for {abs_file_name}')
                 new_entry = ManifestEntry(abs_file_name, entry.sha, entry.base_sha, uid, gid, mode)
@@ -120,7 +125,9 @@ class BackupStore(metaclass=ABCMeta):
                 logger.info(f'{abs_file_name} is up to date!')
 
     def save(self, entry: ManifestEntry, tmpfile: IOIter) -> None:
-        """ Wrapper around the _save function that converts the SHA to a path and inserts data into the manifest """
+        """ Wrapper around the _save function that converts the SHA to a path and inserts data into
+        the manifest
+        """
         self._save(sha_to_path(entry.sha), tmpfile)
         self.manifest.insert_or_update(entry)
 
@@ -138,7 +145,9 @@ class BackupStore(metaclass=ABCMeta):
 
     @property
     def manifest(self) -> Manifest:
-        """ Wrapper around the manifest to make sure we've unlocked it in a with open_manifest()... block """
+        """ Wrapper around the manifest to make sure we've unlocked it in a
+        with open_manifest()... block
+        """
         if not self._manifest:
             raise ManifestLockedException('The manifest is currently locked')
         return self._manifest

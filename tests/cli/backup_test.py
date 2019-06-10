@@ -51,6 +51,9 @@ def test_main():
         assert mock_scan.call_count == 3
         for i in range(3):
             assert mock_scan.call_args_list[i][0][0] == f'/path/{i}'
-        assert mock_scan.call_args_list[0][0][2] == [re.compile('dont_back_this_up'), re.compile('foo')]
-        assert mock_scan.call_args_list[1][0][2] == [re.compile('dont_back_this_up'), re.compile('bar')]
-        assert mock_scan.call_args_list[2][0][2] == [re.compile('dont_back_this_up'), re.compile('bar')]
+        assert mock_scan.call_args_list[0][0][2] == [
+            re.compile('dont_back_this_up'), re.compile('foo')]
+        assert mock_scan.call_args_list[1][0][2] == [
+            re.compile('dont_back_this_up'), re.compile('bar')]
+        assert mock_scan.call_args_list[2][0][2] == [
+            re.compile('dont_back_this_up'), re.compile('bar')]

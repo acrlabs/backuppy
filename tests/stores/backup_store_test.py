@@ -34,7 +34,8 @@ def test_open_manifest(caplog, backup_store, manifest_changed):
         with backup_store.open_manifest():
             pass
         assert mock_remove.call_count == 1
-        assert count_matching_log_lines('No changes detected; nothing to do', caplog) == 1 - manifest_changed
+        assert count_matching_log_lines(
+            'No changes detected; nothing to do', caplog) == 1 - manifest_changed
 
 
 def test_open_locked_manifest(backup_store):
