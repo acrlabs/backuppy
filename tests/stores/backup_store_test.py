@@ -6,8 +6,18 @@ from backuppy.stores.backup_store import BackupStore
 from tests.conftest import count_matching_log_lines
 
 
+@pytest.fixture(autouse=True)
+def mock_save_load(request):
+    if 'no_mocksaveload' in request.keywords:
+        yield
+    else:
+        with mock.patch('backuppy.stores.backup_store.BackupStore.save'), \
+                mock.patch('backuppy.stores.backup_store.BackupStore.load'):
+            yield
+
+
 @pytest.fixture
-def backup_store():
+def backup_store(dummy_save_load=True):
     class DummyBackupStore(BackupStore):
         _save = mock.Mock()
         _load = mock.Mock()
@@ -50,8 +60,8 @@ def test_save_if_new_with_new_file(backup_store):
         mock_copy.return_value = 'abcdef123'
         backup_store.save_if_new('/foo')
         assert mock_copy.call_count == 1
-        assert backup_store._save.call_args[0][0] == 'ab/cd/ef123'
-        assert backup_store._load.call_count == 0
+        assert backup_store.save.call_args[1]['dest'] == 'abcdef123'
+        assert backup_store.load.call_count == 0
         assert backup_store.manifest.insert_or_update.call_count == 1
 
 
@@ -65,8 +75,8 @@ def test_save_if_new_sha_different(backup_store, base_sha):
         mock_compute_sha_diff.return_value = ('111111111', mock.Mock())
         backup_store.save_if_new('/foo')
         assert mock_copy.call_count == 0
-        assert backup_store._save.call_args[0][0] == '11/11/11111'
-        assert backup_store._load.call_count == 1
+        assert backup_store.save.call_args[1]['dest'] == '111111111'
+        assert backup_store.load.call_count == 1
         assert backup_store.manifest.insert_or_update.call_count == 1
 
 
@@ -83,3 +93,30 @@ def test_save_if_new_sha_equal(backup_store, uid_changed):
         assert backup_store._save.call_count == 0
         assert backup_store._load.call_count == 0
         assert backup_store.manifest.insert_or_update.call_count == int(uid_changed)
+
+
+@pytest.mark.no_mocksaveload
+@pytest.mark.parametrize('is_manifest', [True, False])
+def test_save(backup_store, is_manifest):
+    expected_path = '/tmp/backuppy/12345678' if is_manifest else '/tmp/backuppy/12/34/5678'
+    with mock.patch('backuppy.stores.backup_store.IOIter') as mock_io_iter, \
+            mock.patch('backuppy.stores.backup_store.compress_and_encrypt') as mock_compress:
+        backup_store.save(mock.Mock(), '12345678', is_manifest=is_manifest)
+        assert mock_compress.call_count == 1
+        assert mock_io_iter.call_args[0][0] == expected_path
+        assert backup_store._save.call_args == mock.call(
+            expected_path,
+            '12345678' if is_manifest else '12/34/5678',
+            overwrite=is_manifest,
+        )
+
+
+@pytest.mark.no_mocksaveload
+@pytest.mark.parametrize('is_manifest', [True, False])
+def test_load(backup_store, is_manifest):
+    with mock.patch('backuppy.stores.backup_store.IOIter') as mock_io_iter, \
+            mock.patch('backuppy.stores.backup_store.decrypt_and_unpack') as mock_decrypt:
+        backup_store.load('12345678', mock.Mock(), is_manifest=is_manifest)
+        assert mock_decrypt.call_count == 1
+        assert mock_io_iter.call_args == mock.call()
+        assert backup_store._load.call_args[0][0] == '12345678' if is_manifest else '12/34/5678'

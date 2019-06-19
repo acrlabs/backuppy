@@ -55,14 +55,14 @@ close the manifest
     the backup store.  The version in the backup store will not be updated until the backup is
     complete.  This operation will be atomic, so either the stored manifest will be the old version
     or the new version.
-    
+
 (M2) An entry shall not be commited to the manifest until the associated data is stored in the
     backup store.  It is OK if data is in the store but not in the manifest, as the next time we
     perform a backup we will see that the data is already there and not overwrite it.
-    
+
 (M3) The backup loop may decide to commit intermediate versions of the manifest to minimize the
     amount of work needed if a backup crashes partway through; this operation shall also be atomic.
-    
+
 (M4, TODO) To further protect against data corruption, `n` copies of older manifest versions shall
     be retained, so that even if the latest version is unreadable for some reason, there is still a
     possibility of recovering some data.
@@ -71,14 +71,14 @@ close the manifest
 (F1) If any error occurs while trying to back up a file, the backup loop will log the error and
     continue; failure to back up a single file should not prevent the rest of the backup from
     succeeding.
-    
+
 (F2) If the file contents change while trying to back up the file, an error will occur to avoid
     corrupted backup data.
-    
+
 (F3) Backup operations shall be atomic: there should be no possibility of storing partial data in
     the backup store.  Thus, backup data should be written to a temporary location and then moved to
     their final location in the store.
-    
+
 (F4) Data that is in the store shall never be deleted or overwritten.  Since the stores are indexed
     by sha, it doesn't matter where the data "came from" if the sha matches.  Files that have been
     deleted will instead just be marked as "not present" in the manifest.

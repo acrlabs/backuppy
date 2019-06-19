@@ -26,6 +26,7 @@ def mock_open_streams():
             mock.patch('backuppy.io.os.open'), \
             mock.patch('backuppy.io.os.fdopen'), \
             mock.patch('backuppy.io.os.stat'), \
+            mock.patch('backuppy.io.os.makedirs'), \
             orig, new, diff:
         orig.block_size = new.block_size = diff.block_size = 2
         orig._fd = BytesIO(b'asdfasdfa')
