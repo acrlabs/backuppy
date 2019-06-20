@@ -27,28 +27,6 @@ have explicit integration tests to ensure that these guarantees are met.
 
 The software should gracefully shut down whenever it can; however, we want to make sure that even in
 the event of a non-graceful shutdown such as power loss that data corruption or loss doesn't occur.
-Below we outline the "core backup loop" of Backuppy and describe what happens if a failure occurs at
-any point:
-
-```
-open the manifest
-for each file in the directory to back up:
-  check if the file matches an exclusion
-  record that the file has been "seen"
-
-  if the file doesn't exist in the manifest
-    save a new copy of the file to the backup store
-    add the file to the manifest
-  else if the file has changed since the last backup
-    compute a diff between the file and the "original" file in the manifest
-    save the diff to the backup store
-    update the manifest with the new file
-  else if the file's metadata has changed since the last backup
-    update the metadata stored in the manifest
-
-  mark every file that hasn't been "seen" as deleted in the manifest
-close the manifest
-```
 
 ### Manifest Guarantees
 (M1) The manifest being operated on while a backup is performed is a local copy of the version in
@@ -82,3 +60,7 @@ close the manifest
 (F4) Data that is in the store shall never be deleted or overwritten.  Since the stores are indexed
     by sha, it doesn't matter where the data "came from" if the sha matches.  Files that have been
     deleted will instead just be marked as "not present" in the manifest.
+
+(F5) The program can support arbitrarily large files, meaning that we can't rely on the contents
+    fitting into memory.  This means that additional copies of files are juggled around so that the
+    backup can read and write data in chunks.
