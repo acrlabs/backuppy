@@ -82,7 +82,7 @@ class IOIter:
         while True:
             self._check_mtime()
             requested_read_size = self.block_size
-            if end and end - self.fd.tell() < requested_read_size:
+            if end is not None and end - self.fd.tell() < requested_read_size:
                 requested_read_size = end - self.fd.tell()
             data = self.fd.read(requested_read_size)
             logger.debug2(f'read {len(data)} bytes from {self.filename}')

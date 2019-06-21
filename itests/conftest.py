@@ -32,4 +32,4 @@ def initialize():
 
     os.makedirs(DATA_DIR)
     os.makedirs(BACKUP_DIR)
-    setup_logging('debug2')
+    setup_logging('debug')

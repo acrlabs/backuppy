@@ -145,6 +145,7 @@ class BackupStore(metaclass=ABCMeta):
         if not is_manifest:
             dest = sha_to_path(dest)
 
+        # This can't be a TemporaryFile because the backup_store needs to save it atomically
         encrypted_save_file_path = path_join(BACKUPPY_SCRATCH, dest)
 
         with IOIter(encrypted_save_file_path) as encrypted_save_file:

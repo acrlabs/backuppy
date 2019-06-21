@@ -84,7 +84,7 @@ def apply_diff(orig_file: IOIter, diff_file: IOIter, new_file: IOIter) -> None:
 
     # If we get here and there's still data in the original file, it must be equal to what was in
     # the new file, so just copy any remaining data from the original file to the new file
-    for data in orig_file.reader(end=orig_file.stat().st_size, reset_pos=False):
+    for data in orig_file.reader(reset_pos=False):
         writer.send(data)
 
 
