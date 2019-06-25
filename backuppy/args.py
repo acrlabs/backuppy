@@ -1,6 +1,8 @@
 import argparse
 import sys
 from typing import Callable
+from typing import List
+from typing import Optional
 
 import colorlog
 
@@ -36,7 +38,10 @@ def subparser(command: str, description: str, entrypoint: Callable) -> Callable:
     return decorator
 
 
-def parse_args(description: str) -> argparse.Namespace:  # pragma: no cover
+def parse_args(
+    description: str,
+    arg_list: Optional[List[str]],
+) -> argparse.Namespace:  # pragma: no cover
     """Set up parser for the CLI tool and any subcommands
 
     :param description: a string descripting the tool
@@ -78,7 +83,7 @@ def parse_args(description: str) -> argparse.Namespace:  # pragma: no cover
     from backuppy.cli.backup import add_backup_parser
     add_backup_parser(subparser)
 
-    args = root_parser.parse_args()
+    args = root_parser.parse_args(args=(arg_list or sys.argv))
 
     if args.subcommand is None:
         logger.error('missing subcommand')

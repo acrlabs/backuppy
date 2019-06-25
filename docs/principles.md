@@ -34,14 +34,14 @@ the event of a non-graceful shutdown such as power loss that data corruption or 
     complete.  This operation will be atomic, so either the stored manifest will be the old version
     or the new version.
 
+(M1a) The backup loop may decide to commit intermediate versions of the manifest to minimize the
+    amount of work needed if a backup crashes partway through; this operation shall also be atomic.
+
 (M2) An entry shall not be commited to the manifest until the associated data is stored in the
     backup store.  It is OK if data is in the store but not in the manifest, as the next time we
     perform a backup we will see that the data is already there and not overwrite it.
 
-(M3) The backup loop may decide to commit intermediate versions of the manifest to minimize the
-    amount of work needed if a backup crashes partway through; this operation shall also be atomic.
-
-(M4, TODO) To further protect against data corruption, `n` copies of older manifest versions shall
+(M3, TODO) To further protect against data corruption, `n` copies of older manifest versions shall
     be retained, so that even if the latest version is unreadable for some reason, there is still a
     possibility of recovering some data.
 

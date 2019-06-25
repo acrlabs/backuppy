@@ -78,11 +78,11 @@ class BackupStore(metaclass=ABCMeta):
 
                 yield
 
-                if self._manifest.changed:
+                if self._manifest.changed:  # test_m1_crash_before_save
                     self.save(src=manifest_file, dest=MANIFEST_PATH, is_manifest=True)
                 else:
                     logger.info('No changes detected; nothing to do')
-                self._manifest = None
+                self._manifest = None  # test_m1_crash_after_save
         finally:
             # always do our cleanup
             os.remove(unlocked_manifest_filename)
@@ -104,11 +104,11 @@ class BackupStore(metaclass=ABCMeta):
             if not entry or not entry.sha:
                 logger.info(f'Saving a new copy of {abs_file_name}')
                 with IOIter() as new_file_copy:
-                    new_sha = io_copy(new_file, new_file_copy)
+                    new_sha = io_copy(new_file, new_file_copy)  # test_m2_crash_before_file_save
                     new_entry = ManifestEntry(abs_file_name, new_sha, None, uid, gid, mode)
                     self.save(src=new_file_copy, dest=new_entry.sha)
                     self.manifest.insert_or_update(new_entry)
-                return
+                return  # test_m2_crash_after_file_save
 
             # If the file has been backed up, check to see if it's changed by comparing shas
             if new_sha != entry.sha:

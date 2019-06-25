@@ -80,5 +80,6 @@ def add_backup_parser(subparser) -> None:  # pragma: no cover
     subparser.add_argument(
         '--config',
         default='backuppy.conf',
+        metavar='filename',
         help='Config file to load specifying what to back up',
     )

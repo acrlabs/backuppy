@@ -1,4 +1,6 @@
 import logging
+from typing import List
+from typing import Optional
 
 import colorlog
 import staticconf
@@ -20,30 +22,31 @@ def _log_fns_for_level(log_level):
 
 
 def setup_logging(log_level_str: str = 'info') -> None:
+    global logger
+    if not len(logger.handlers):
+        logging.addLevelName(DEBUG2, 'DEBUG2')
+        setattr(logging, 'DEBUG2', DEBUG2)
+        log_fn, root_log_fn = _log_fns_for_level(DEBUG2)
+        setattr(logging.getLoggerClass(), 'debug2', log_fn)
+        setattr(logging, 'debug2', root_log_fn)
 
-    logging.addLevelName(DEBUG2, 'DEBUG2')
-    setattr(logging, 'DEBUG2', DEBUG2)
-    log_fn, root_log_fn = _log_fns_for_level(DEBUG2)
-    setattr(logging.getLoggerClass(), 'debug2', log_fn)
-    setattr(logging, 'debug2', root_log_fn)
+        handler = colorlog.StreamHandler()
+        handler.setFormatter(colorlog.ColoredFormatter(
+            '%(log_color)s%(levelname)s:%(name)s:%(message)s'))
+        logger = colorlog.getLogger()
+        logger.addHandler(handler)
 
-    handler = colorlog.StreamHandler()
-    handler.setFormatter(colorlog.ColoredFormatter(
-        '%(log_color)s%(levelname)s:%(name)s:%(message)s'))
-    logger = colorlog.getLogger()
-    logger.addHandler(handler)
-
-    log_level = getattr(logging, log_level_str.upper())
-    logging.getLogger().setLevel(log_level)
+        log_level = getattr(logging, log_level_str.upper())
+        logging.getLogger().setLevel(log_level)
 
 
-def main():
-    args = parse_args("BackupPY - an open-source backup tool")
+def main(arg_list: Optional[List[str]] = None) -> None:
+    args = parse_args("BackupPY - an open-source backup tool", arg_list)
+    setup_logging(args.log_level)
     staticconf.DictConfiguration({
         'use_encryption': not args.disable_encryption,
         'use_compression': not args.disable_compression,
     })
-    setup_logging(args.log_level)
     args.entrypoint(args)
 
 
