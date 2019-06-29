@@ -38,8 +38,10 @@ the event of a non-graceful shutdown such as power loss that data corruption or 
     amount of work needed if a backup crashes partway through; this operation shall also be atomic.
 
 (M2) An entry shall not be commited to the manifest until the associated data is stored in the
-    backup store.  It is OK if data is in the store but not in the manifest, as the next time we
-    perform a backup we will see that the data is already there and not overwrite it.
+    backup store.  
+
+(M2a) It is OK if data is in the store but not in the manifest, as the next time we perform a
+    backup we will see that the data is already there and not overwrite it.
 
 (M3, TODO) To further protect against data corruption, `n` copies of older manifest versions shall
     be retained, so that even if the latest version is unreadable for some reason, there is still a
@@ -50,17 +52,13 @@ the event of a non-graceful shutdown such as power loss that data corruption or 
     continue; failure to back up a single file should not prevent the rest of the backup from
     succeeding.
 
-(F2) If the file contents change while trying to back up the file, an error will occur to avoid
-    corrupted backup data.
-
-(F3) Backup operations shall be atomic: there should be no possibility of storing partial data in
+(F2) Backup operations shall be atomic: there should be no possibility of storing partial data in
     the backup store.  Thus, backup data should be written to a temporary location and then moved to
     their final location in the store.
+
+(F3) If the file contents change while trying to back up the file, an error will occur to avoid
+    corrupted backup data.
 
 (F4) Data that is in the store shall never be deleted or overwritten.  Since the stores are indexed
     by sha, it doesn't matter where the data "came from" if the sha matches.  Files that have been
     deleted will instead just be marked as "not present" in the manifest.
-
-(F5) The program can support arbitrarily large files, meaning that we can't rely on the contents
-    fitting into memory.  This means that additional copies of files are juggled around so that the
-    backup can read and write data in chunks.

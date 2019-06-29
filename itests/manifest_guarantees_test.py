@@ -3,16 +3,19 @@ import sqlite3
 
 import pytest
 
+from backuppy.util import sha_to_path
 from itests.conftest import _TestFileData
+from itests.conftest import BACKUP_DIR
 from itests.conftest import backup_itest_wrapper
 from itests.conftest import DATA_DIR
 from itests.conftest import ITEST_MANIFEST_PATH
+from itests.conftest import ItestException
 
 test_file_history = dict()  # type: ignore
 
 
 def abort():
-    raise Exception('abort')
+    raise ItestException('abort')
 
 
 def assert_manifest_correct(before):
@@ -43,15 +46,21 @@ def setup_manifest():
 @backup_itest_wrapper(
     test_file_history,
     _TestFileData('foo', 'asdfhjkl'),
-    trace=(abort, pytest.raises(Exception)),
+    side_effect=(abort, pytest.raises(Exception)),
 )
 def test_m1_crash_before_save():
     assert_manifest_correct(before=True)
+    file_data_path = os.path.join(DATA_DIR, 'foo')
+    file_backup_path = os.path.join(
+        BACKUP_DIR,
+        sha_to_path(test_file_history[file_data_path][1].sha),
+    )
+    assert os.path.exists(file_backup_path)
 
 
 @backup_itest_wrapper(
     test_file_history,
-    trace=(abort, pytest.raises(Exception)),
+    side_effect=(abort, pytest.raises(Exception)),
 )
 def test_m1_crash_after_save():
     assert_manifest_correct(before=False)
@@ -60,7 +69,7 @@ def test_m1_crash_after_save():
 @backup_itest_wrapper(
     test_file_history,
     _TestFileData('another_file', '1234'),
-    trace=(abort, None),
+    side_effect=(abort, None),
 )
 def test_m2_crash_before_file_save():
     manifest_conn = sqlite3.connect(ITEST_MANIFEST_PATH)
@@ -74,7 +83,7 @@ def test_m2_crash_before_file_save():
 
 @backup_itest_wrapper(
     test_file_history,
-    trace=(abort, None),
+    side_effect=(abort, None),
 )
 def test_m2_crash_after_file_save():
     manifest_conn = sqlite3.connect(ITEST_MANIFEST_PATH)

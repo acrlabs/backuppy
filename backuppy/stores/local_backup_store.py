@@ -25,8 +25,9 @@ class LocalBackupStore(BackupStore):
             logger.warning(f'{abs_backup_path} already exists in the store; skipping')
             return
 
-        logger.info(f'Writing {src} to {abs_backup_path}')
+        logger.info(f'Writing {src} to {abs_backup_path}')  # test_f2_lbs_atomicity_1
         os.rename(src, abs_backup_path)
+        return  # test_f2_lbs_atomicity_2
 
     def _load(self, path: str, output_file: IOIter) -> IOIter:
         abs_backup_path = path_join(self.backup_location, path)

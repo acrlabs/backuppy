@@ -103,7 +103,7 @@ class BackupStore(metaclass=ABCMeta):
             # the file up, and that we have the correct sha
             if not entry or not entry.sha:
                 logger.info(f'Saving a new copy of {abs_file_name}')
-                with IOIter() as new_file_copy:
+                with IOIter() as new_file_copy:  # test_f3_file_changed_while_saving
                     new_sha = io_copy(new_file, new_file_copy)  # test_m2_crash_before_file_save
                     new_entry = ManifestEntry(abs_file_name, new_sha, None, uid, gid, mode)
                     self.save(src=new_file_copy, dest=new_entry.sha)
@@ -150,7 +150,7 @@ class BackupStore(metaclass=ABCMeta):
 
         with IOIter(encrypted_save_file_path) as encrypted_save_file:
             compress_and_encrypt(src, encrypted_save_file, TEMP_AES_KEY, TEMP_IV)
-        self._save(encrypted_save_file_path, dest, overwrite=is_manifest)
+        self._save(encrypted_save_file_path, dest, overwrite=is_manifest)  # test_f1_crash_file_save
 
     def load(self, src: str, dest: IOIter, is_manifest: bool = False) -> IOIter:
         """ Wrapper around the _load function that converts the SHA to a path """

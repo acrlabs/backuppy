@@ -1,4 +1,10 @@
 
+Here's a bit of pseudocode explaining how different types of files are backed up.  It's a little
+complicated to keep all these in your head; the reason for the complexity is that the program can
+support arbitrarily large files, meaning that we can't rely on the contents fitting into memory.
+This means that additional copies of files are juggled around so that the backup can read and write
+data in chunks.  
+
 ## Backup Loop
 
 ```

@@ -46,6 +46,10 @@ def initialize():
     os.makedirs(BACKUP_DIR)
 
 
+class ItestException(Exception):
+    pass
+
+
 class _TestFileData:
     def __init__(self, filename, contents, mode=0o100644):
         self.path = os.path.join(DATA_DIR, filename)
@@ -96,18 +100,25 @@ def make_trace_func(search_string, side_effect):
             line = traceback.extract_stack(frame, limit=1)[0].line
             m = re.search(f'#\s+{search_string}', line)
             if m:
+                # Note that if side_effect() raises an Exception, the trace function will
+                # no longer function, because this must return a reference to trace_func and
+                # raising doesn't return; the practical effect of this is that each individual
+                # itest can only inject one "crash" into the application.  I think this is
+                # generally OK, since itests "shouldn't" be testing multiple things at once
                 side_effect()
+            return trace_func
+
     return trace_func
 
 
 def backup_itest_wrapper(
     test_file_history,
     *dec_args,
-    trace=None,
+    side_effect=None,
 ):
     def decorator(test_case):
         def wrapper(*args, **kwargs):
-            context = trace[1] if trace and trace[1] else ExitStack()
+            context = side_effect[1] if side_effect and side_effect[1] else ExitStack()
             for tfd in dec_args:
                 if tfd.path in test_file_history and tfd != test_file_history[tfd.path][-1]:
                     test_file_history[tfd.path].append(tfd)
@@ -116,8 +127,10 @@ def backup_itest_wrapper(
                     test_file_history[tfd.path] = [tfd]
                     tfd.write()
 
-            if trace:
-                sys.settrace(make_trace_func(test_case.__name__, trace[0]))
+            if side_effect and side_effect[0]:
+                sys.settrace(make_trace_func(test_case.__name__, side_effect[0]))
+            else:
+                sys.settrace(lambda a, b, c: None)
             with context:
                 main(BACKUP_ARGS)
             test_case(*args, **kwargs)
