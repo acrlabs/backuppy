@@ -57,6 +57,7 @@ def assert_backup_store_correct():
     _TestFileData('baz/buz', 'qwerty'),
     _TestFileData('dont_back_me_up_1', 'secrets!'),
     _TestFileData('baz/dont_back_me_up_2', 'moar secrets!'),
+    _TestFileData('fizzbuzz', 'I am a walrus', data_dir_index=1),
 )
 def test_initial_backup():
     assert_backup_store_correct()

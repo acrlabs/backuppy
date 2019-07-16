@@ -19,7 +19,6 @@ def test_scan_directory(file_walker):
             raise Exception('oops!')
 
     store.save_if_new.side_effect = save_if_new
-    store.manifest.files.return_value = {'/file1', '/error', '/file2', '/file3', '/file4'}
 
     _scan_directory('/', store, [re.compile('skip')])
     assert store.save_if_new.call_args_list == [
@@ -28,7 +27,6 @@ def test_scan_directory(file_walker):
         mock.call('/file2'),
         mock.call('/file3'),
     ]
-    assert store.manifest.delete.call_args_list == [mock.call('/file4')]
 
 
 def test_main():
@@ -46,7 +44,10 @@ def test_main():
                     },
                 }
             }, flatten=False), mock.patch('backuppy.cli.backup._scan_directory') as mock_scan, \
-            mock.patch('backuppy.cli.backup.get_backup_store'):
+            mock.patch('backuppy.cli.backup.get_backup_store') as mock_get_store:
+        store = mock_get_store.return_value
+        store.manifest.files.return_value = {'/file1', '/file2', '/file3', '/file4'}
+        mock_scan.side_effect = [{'/file1', '/file2', '/file3'}, {'/file1'}, {'/file2', '/file3'}]
         main(argparse.Namespace(config='backuppy.conf'))
         assert mock_scan.call_count == 3
         for i in range(3):
@@ -57,3 +58,4 @@ def test_main():
             re.compile('dont_back_this_up'), re.compile('bar')]
         assert mock_scan.call_args_list[2][0][2] == [
             re.compile('dont_back_this_up'), re.compile('bar')]
+        assert all([c == mock.call('/file4') for c in store.manifest.delete.call_args_list])

@@ -2,6 +2,7 @@ import argparse
 import os
 from typing import List
 from typing import Pattern
+from typing import Set
 
 import colorlog
 import staticconf
@@ -19,7 +20,7 @@ def _scan_directory(
     abs_base_path: str,
     backup_store: BackupStore,
     exclusions: List[Pattern],
-) -> None:
+) -> Set[str]:
     """ scan a directory looking for changes from the manifest
 
     :param abs_base_path: the root of the directory to scan
@@ -50,9 +51,7 @@ def _scan_directory(
 
     # Mark all files that weren't touched in the above loop as "deleted"
     # (we don't actually delete the file, just record that it's no longer present)
-    for abs_file_name in backup_store.manifest.files() - marked_files:
-        logger.info(f'{abs_file_name} has been deleted')
-        backup_store.manifest.delete(abs_file_name)
+    return marked_files
 
 
 def main(args: argparse.Namespace):
@@ -65,21 +64,21 @@ def main(args: argparse.Namespace):
         logger.info(f'Starting backup for {backup_name}')
         backup_store = get_backup_store(backup_name)
 
-        for base_path in staticconf.read_list('directories', namespace=backup_name):
-            abs_base_path = os.path.abspath(base_path)
-            local_exclusions = compile_exclusions(
-                staticconf.read_list('exclusions', [], namespace=backup_name))
-            exclusions = global_exclusions + local_exclusions
-            with backup_store.open_manifest():
-                _scan_directory(abs_base_path, backup_store, exclusions)
+        with backup_store.open_manifest():
+            marked_files: Set[str] = set()
+            for base_path in staticconf.read_list('directories', namespace=backup_name):
+                abs_base_path = os.path.abspath(base_path)
+                local_exclusions = compile_exclusions(
+                    staticconf.read_list('exclusions', [], namespace=backup_name))
+                exclusions = global_exclusions + local_exclusions
+                marked_files |= _scan_directory(abs_base_path, backup_store, exclusions)
+
+            for abs_file_name in backup_store.manifest.files() - marked_files:
+                logger.info(f'{abs_file_name} has been deleted')
+                backup_store.manifest.delete(abs_file_name)
         logger.info(f'Backup for {backup_name} finished')
 
 
 @subparser('backup', 'perform a backup of all configured locations', main)
 def add_backup_parser(subparser) -> None:  # pragma: no cover
-    subparser.add_argument(
-        '--config',
-        default='backuppy.conf',
-        metavar='filename',
-        help='Config file to load specifying what to back up',
-    )
+    pass

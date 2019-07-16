@@ -13,15 +13,15 @@ from backuppy.run import main
 from backuppy.stores.backup_store import MANIFEST_PATH
 
 ITEST_ROOT = 'itests'
-DATA_DIR = os.path.join(ITEST_ROOT, 'data')
+DATA_DIRS = [os.path.join(ITEST_ROOT, 'data'), os.path.join(ITEST_ROOT, 'data2')]
 BACKUP_DIR = os.path.join(ITEST_ROOT, 'backup')
 ITEST_MANIFEST_PATH = os.path.join(BACKUP_DIR, MANIFEST_PATH)
 BACKUP_ARGS = [
     '--log-level', 'debug',
     '--disable-compression',
     '--disable-encryption',
-    'backup',
     '--config', os.path.join(ITEST_ROOT, 'itest.conf'),
+    'backup',
 ]
 
 
@@ -34,7 +34,7 @@ def compute_sha(string):
 @pytest.fixture(autouse=True, scope='module')
 def initialize():
     try:
-        rmtree(DATA_DIR)
+        [rmtree(d) for d in DATA_DIRS]
     except FileNotFoundError:
         pass
     try:
@@ -42,7 +42,7 @@ def initialize():
     except FileNotFoundError:
         pass
 
-    os.makedirs(DATA_DIR)
+    [os.makedirs(d) for d in DATA_DIRS]
     os.makedirs(BACKUP_DIR)
 
 
@@ -51,8 +51,8 @@ class ItestException(Exception):
 
 
 class _TestFileData:
-    def __init__(self, filename, contents, mode=0o100644):
-        self.path = os.path.join(DATA_DIR, filename)
+    def __init__(self, filename, contents, data_dir_index=0, mode=0o100644):
+        self.path = os.path.join(DATA_DIRS[data_dir_index], filename)
         if contents:
             self.contents = contents.encode()
             self.sha = compute_sha(self.contents)

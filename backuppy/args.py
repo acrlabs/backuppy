@@ -76,6 +76,12 @@ def parse_args(
         action='store_true',
         help='Turn off encrypted backup blobs',
     )
+    root_parser.add_argument(
+        '--config',
+        default='backuppy.conf',
+        metavar='filename',
+        help='Config file to load specifying what to back up',
+    )
 
     subparser = root_parser.add_subparsers(help='accepted commands')
     subparser.dest = 'subcommand'
@@ -83,7 +89,7 @@ def parse_args(
     from backuppy.cli.backup import add_backup_parser
     add_backup_parser(subparser)
 
-    args = root_parser.parse_args(args=(arg_list or sys.argv))
+    args = root_parser.parse_args(args=(arg_list or sys.argv[1:]))
 
     if args.subcommand is None:
         logger.error('missing subcommand')

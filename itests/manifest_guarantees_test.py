@@ -7,11 +7,12 @@ from backuppy.util import sha_to_path
 from itests.conftest import _TestFileData
 from itests.conftest import BACKUP_DIR
 from itests.conftest import backup_itest_wrapper
-from itests.conftest import DATA_DIR
+from itests.conftest import DATA_DIRS
 from itests.conftest import ITEST_MANIFEST_PATH
 from itests.conftest import ItestException
 
 test_file_history = dict()  # type: ignore
+DATA_DIR = DATA_DIRS[0]
 
 
 def abort():
@@ -25,7 +26,7 @@ def assert_manifest_correct(before):
 
     manifest_cursor.execute('select * from manifest')
     rows = manifest_cursor.fetchall()
-    assert len(rows) == 3 if before else 4
+    assert len(rows) == (3 if before else 4)
     for row in rows:
         start_pos = row[0].find(DATA_DIR)
         filename = row[0][start_pos:]

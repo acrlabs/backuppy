@@ -7,10 +7,11 @@ from backuppy.util import sha_to_path
 from itests.conftest import _TestFileData
 from itests.conftest import BACKUP_DIR
 from itests.conftest import backup_itest_wrapper
-from itests.conftest import DATA_DIR
+from itests.conftest import DATA_DIRS
 from itests.conftest import ItestException
 
 test_file_history = dict()  # type: ignore
+DATA_DIR = DATA_DIRS[0]
 
 
 def abort():
