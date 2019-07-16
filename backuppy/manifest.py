@@ -1,5 +1,6 @@
 import sqlite3
 import time
+from typing import List
 from typing import Optional
 from typing import Set
 from typing import Tuple
@@ -7,6 +8,8 @@ from typing import Tuple
 import colorlog
 
 logger = colorlog.getLogger(__name__)
+ManifestEntryHistory = List[Tuple['ManifestEntry', int]]
+QueryResponse = Tuple[str, ManifestEntryHistory]
 
 
 class ManifestEntry:
@@ -72,7 +75,7 @@ class Manifest:
         abs_file_name: str,
         timestamp: Optional[int] = None,
     ) -> Optional[ManifestEntry]:
-        """ Return a (base file, diff) pair which can be used to reconstruct the specified file
+        """ Get the contents of the manifest for the most recent version of a file
 
         :param abs_file_name: the name of the file to reconstruct
         :param timestamp: the point in time for which we want to reconstruct the file
@@ -94,6 +97,48 @@ class Manifest:
 
         latest_row = rows[-1]
         return ManifestEntry.from_row(latest_row)
+
+    def search(
+        self,
+        like: str = '',
+        before_timestamp: Optional[int] = None,
+        after_timestamp: Optional[int] = None,
+        file_limit: Optional[int] = None,
+        history_limit: Optional[int] = None,
+    ) -> List[QueryResponse]:
+
+        if file_limit == 0 or history_limit == 0:
+            return []
+
+        like_query = f"%{like or ''}%"
+        before_timestamp = before_timestamp or int(time.time())
+        after_timestamp = after_timestamp or 0
+        self._cursor.execute(
+            '''
+            select * from manifest natural left join diff_pairs
+            where abs_file_name like ? and commit_timestamp between ? and ?
+            order by abs_file_name, commit_timestamp desc
+            ''',
+            (like_query, after_timestamp, before_timestamp)
+        )
+
+        results: List[QueryResponse] = []
+        rows, i, file_count = self._cursor.fetchall(), 0, 0
+        while i < len(rows):
+            abs_file_name, history, j = rows[i]['abs_file_name'], [], 0
+            while i + j < len(rows) and rows[i + j]['abs_file_name'] == abs_file_name:
+                if not history_limit or j < history_limit:
+                    history.append((
+                        ManifestEntry.from_row(rows[i + j]),
+                        rows[i + j]['commit_timestamp'],
+                    ))
+                j += 1
+
+            results.append((abs_file_name, history))
+            file_count += 1
+            i += j
+
+        return results
 
     def insert_or_update(self, entry: ManifestEntry) -> None:
         """ Insert a new entry into the manifest
@@ -150,6 +195,7 @@ class Manifest:
         specified time
 
         :param timestamp: the most recent commit timestamp to consider in the manifest
+        :returns: all of the absolute filenames contained in the manifest matching the criteria
         """
         timestamp = timestamp or int(time.time())
         self._cursor.execute(

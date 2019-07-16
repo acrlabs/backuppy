@@ -87,7 +87,9 @@ def parse_args(
     subparser.dest = 'subcommand'
 
     from backuppy.cli.backup import add_backup_parser
+    from backuppy.cli.list import add_list_parser
     add_backup_parser(subparser)
+    add_list_parser(subparser)
 
     args = root_parser.parse_args(args=(arg_list or sys.argv[1:]))
 

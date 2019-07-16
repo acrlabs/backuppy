@@ -18,6 +18,10 @@ class FileChangedException(BackuppyException):
     pass
 
 
+class InputParseError(BackuppyException):
+    pass
+
+
 class ManifestLockedException(BackuppyException):
     pass
 

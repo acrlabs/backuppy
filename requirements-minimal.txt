@@ -1,6 +1,8 @@
 boto3
 colorlog
 cryptography
+dateparser
 edlib>=1.2.3.post1
 PyYAML
 PyStaticConfiguration
+tabulate
