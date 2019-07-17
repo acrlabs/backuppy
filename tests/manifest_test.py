@@ -83,6 +83,46 @@ def test_get_entry_file_deleted(mock_manifest):
     assert not entry.mode
 
 
+def test_search(mock_manifest):
+    results = mock_manifest.search()
+    assert len(results) == 3
+    for path, history in results:
+        assert len(history) == 2
+        assert history[0][1] > history[1][1]
+
+
+def test_search_with_query(mock_manifest):
+    results = mock_manifest.search(like='ba')
+    assert len(results) == 2
+    assert results[0][0] == '/bar'
+    assert results[1][0] == '/baz'
+
+
+def test_search_time_window(mock_manifest):
+    results = mock_manifest.search(after_timestamp=60, before_timestamp=150)
+    assert len(results) == 2
+    assert results[0][0] == '/baz'
+    assert results[1][0] == '/foo'
+    for path, history in results:
+        assert 60 < history[0][1] < 150
+
+
+@pytest.mark.parametrize('limit', [0, 1])
+def test_search_file_limit(mock_manifest, limit):
+    results = mock_manifest.search(file_limit=limit)
+    assert len(results) == limit
+    for path, history in results:
+        assert len(history) == 2
+
+
+@pytest.mark.parametrize('limit', [0, 1])
+def test_search_history_limit(mock_manifest, limit):
+    results = mock_manifest.search(history_limit=limit)
+    assert len(results) == (0 if limit == 0 else 3)
+    for path, history in results:
+        assert len(history) == 1
+
+
 @pytest.mark.parametrize('base_sha', [None, 'f33b'])
 def test_insert_new_file(mock_manifest, mock_stat, base_sha):
     new_file = '/not/backed/up'

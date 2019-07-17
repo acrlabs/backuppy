@@ -125,6 +125,9 @@ class Manifest:
         results: List[QueryResponse] = []
         rows, i, file_count = self._cursor.fetchall(), 0, 0
         while i < len(rows):
+            if file_limit and file_count >= file_limit:
+                break
+
             abs_file_name, history, j = rows[i]['abs_file_name'], [], 0
             while i + j < len(rows) and rows[i + j]['abs_file_name'] == abs_file_name:
                 if not history_limit or j < history_limit:

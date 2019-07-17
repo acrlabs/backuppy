@@ -1,5 +1,6 @@
 import os
 import re
+from datetime import datetime
 from typing import Generator
 from typing import List
 from typing import Pattern
@@ -9,11 +10,11 @@ import dateparser
 from backuppy.exceptions import InputParseError
 
 
-def compile_exclusions(exclusions: str) -> List[Pattern]:  # pragma: no cover
+def compile_exclusions(exclusions: str) -> List[Pattern]:
     return [re.compile(excl) for excl in exclusions]
 
 
-def file_walker(path, on_error=None) -> Generator[str, None, None]:  # pragma: no cover
+def file_walker(path, on_error=None) -> Generator[str, None, None]:
     """ Walk through all the files in a path and yield their names one-at-a-time,
     relative to the "path" value passed in.
     """
@@ -22,11 +23,15 @@ def file_walker(path, on_error=None) -> Generator[str, None, None]:  # pragma: n
             yield os.path.join(root, f)
 
 
+def format_time(timestamp: int) -> str:
+    return datetime.fromtimestamp(timestamp).strftime('%Y-%m-%d %H:%M:%S')
+
+
 def parse_time(input_str: str) -> int:
     dt = dateparser.parse(input_str)
     if not dt:
         raise InputParseError(f'Could not parse time "{input_str}"')
-    return int(dt.timestamp)
+    return int(dt.timestamp())
 
 
 def path_join(*args):

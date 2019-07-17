@@ -2,7 +2,6 @@ import argparse
 import re
 
 import mock
-import staticconf.testing
 
 from backuppy.cli.backup import _scan_directory
 from backuppy.cli.backup import main
@@ -31,19 +30,7 @@ def test_scan_directory(file_walker):
 
 def test_main():
     with mock.patch('backuppy.cli.backup.staticconf.YamlConfiguration'), \
-            staticconf.testing.PatchConfiguration({
-                'exclusions': ['dont_back_this_up'],
-                'backups': {
-                    'backup1': {
-                        'directories': ['/path/0'],
-                        'exclusions': ['foo'],
-                    },
-                    'backup2': {
-                        'directories': ['/path/1', '/path/2'],
-                        'exclusions': ['bar']
-                    },
-                }
-            }, flatten=False), mock.patch('backuppy.cli.backup._scan_directory') as mock_scan, \
+            mock.patch('backuppy.cli.backup._scan_directory') as mock_scan, \
             mock.patch('backuppy.cli.backup.get_backup_store') as mock_get_store:
         store = mock_get_store.return_value
         store.manifest.files.return_value = {'/file1', '/file2', '/file3', '/file4'}

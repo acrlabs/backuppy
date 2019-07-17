@@ -1,6 +1,6 @@
 repos:
 -   repo: git@github.com:pre-commit/pre-commit-hooks
-    sha: v0.9.5
+    rev: v0.9.5
     hooks:
     -   id: trailing-whitespace
         language_version: python3.6
@@ -17,12 +17,12 @@ repos:
         language_version: python3.6
         exclude: ^docs/.*
 -   repo: git@github.com:asottile/reorder_python_imports
-    sha: v0.3.5
+    rev: v0.3.5
     hooks:
     -   id: reorder-python-imports
         language_version: python3.6
 -   repo: git@github.com:pre-commit/mirrors-autopep8
-    sha: v1.4.4
+    rev: v1.4.4
     hooks:
     -   id: autopep8
         language_version: python3.6

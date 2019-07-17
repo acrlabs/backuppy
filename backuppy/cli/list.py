@@ -2,7 +2,6 @@ import argparse
 import os
 import stat
 import time
-from datetime import datetime
 from typing import List
 from typing import Tuple
 
@@ -12,6 +11,7 @@ from tabulate import tabulate
 from backuppy.args import subparser
 from backuppy.manifest import QueryResponse
 from backuppy.stores import get_backup_store
+from backuppy.util import format_time
 from backuppy.util import parse_time
 
 DASHES = '-' * 80
@@ -33,7 +33,7 @@ def _print_summary(backup_name: str, search_results: List[QueryResponse]) -> Non
 
     for i, (abs_file_name, history) in enumerate(search_results):
         filename = abs_file_name[len(root_directory):]
-        backup_time_str = datetime.fromtimestamp(history[0][1]).strftime('%Y-%m-%d %H:%M:%S')
+        backup_time_str = format_time(history[0][1])
         contents.append((filename, len(history), backup_time_str))
         if i == len(search_results) - 1 or not search_results[i+1][0].startswith(root_directory):
             print(f'\n{DASHES}\n{root_directory}\n{DASHES}')
@@ -52,7 +52,7 @@ def _print_details(backup_name: str, search_results: List[QueryResponse], sha_le
                 h.uid,
                 h.gid,
                 (stat.filemode(h.mode) if h.mode else '<deleted>'),
-                datetime.fromtimestamp(t).strftime('%Y-%m-%d %H:%M:%S'),
+                format_time(t),
             )
             for h, t in history
         ]
@@ -85,7 +85,7 @@ def main(args: argparse.Namespace) -> None:
 
 
 @subparser('list', 'list the contents of a backup set', main)
-def add_list_parser(subparser):
+def add_list_parser(subparser) -> None:  # pragma: no cover
     subparser.add_argument(
         dest='like',
         type=str,

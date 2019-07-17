@@ -17,7 +17,7 @@ def test_apply_parse_error_1(mock_open_streams):
     diff._fd.write(b'asdf')
     with pytest.raises(DiffParseError) as e:
         apply_diff(orig, diff, new)
-    assert 'Un-parseable diff' in str(e)
+    assert 'Un-parseable diff' in str(e.value)
 
 
 def test_apply_parse_error_2(mock_open_streams):
@@ -25,7 +25,7 @@ def test_apply_parse_error_2(mock_open_streams):
     diff._fd.write(b'@3|q4|asdf')
     with pytest.raises(DiffParseError) as e:
         apply_diff(orig, diff, new)
-    assert 'Expected an action' in str(e)
+    assert 'Expected an action' in str(e.value)
 
 
 def test_contents_length_error(mock_open_streams):
@@ -33,7 +33,7 @@ def test_contents_length_error(mock_open_streams):
     diff._fd.write(b'@3|I7|xy')
     with pytest.raises(DiffParseError) as e:
         apply_diff(orig, diff, new)
-    assert 'Un-parseable diff' in str(e)
+    assert 'Un-parseable diff' in str(e.value)
 
 
 def test_apply_del(mock_open_streams):
