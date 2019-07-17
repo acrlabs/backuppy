@@ -1,5 +1,6 @@
 import argparse
 import os
+import stat
 import time
 from datetime import datetime
 from typing import List
@@ -15,6 +16,7 @@ from backuppy.util import parse_time
 
 DASHES = '-' * 80
 SUMMARY_HEADERS: List[str] = ['filename', 'versions', 'last backup time']
+DETAILS_HEADERS: List[str] = ['sha', 'uid', 'gid', 'permissions', 'backup time']
 
 
 def _find_root_prefix(abs_file_name: str, backup_name: str) -> str:
@@ -42,8 +44,21 @@ def _print_summary(backup_name: str, search_results: List[QueryResponse]) -> Non
     print('')
 
 
-def _print_details(backup_name: str, search_results: List[QueryResponse]) -> None:
-    pass
+def _print_details(backup_name: str, search_results: List[QueryResponse], sha_len: int) -> None:
+    for abs_file_name, history in search_results:
+        contents = [
+            (
+                (h.sha[:sha_len] + '...' if h.sha else None),
+                h.uid,
+                h.gid,
+                (stat.filemode(h.mode) if h.mode else '<deleted>'),
+                datetime.fromtimestamp(t).strftime('%Y-%m-%d %H:%M:%S'),
+            )
+            for h, t in history
+        ]
+        print(f'\n{DASHES}\n{abs_file_name}\n{DASHES}')
+        print(tabulate(contents, headers=DETAILS_HEADERS))
+    print('')
 
 
 def main(args: argparse.Namespace) -> None:
@@ -66,7 +81,7 @@ def main(args: argparse.Namespace) -> None:
     if not args.details:
         _print_summary(args.name, search_results)
     else:
-        _print_details(args.name, search_results)
+        _print_details(args.name, search_results, args.sha_length)
 
 
 @subparser('list', 'list the contents of a backup set', main)
@@ -109,4 +124,10 @@ def add_list_parser(subparser):
         '--details',
         action='store_true',
         help='Print details of the files stored in the backup set',
+    )
+    subparser.add_argument(
+        '--sha-length',
+        type=int,
+        default=8,
+        help='Length of the sha to display in detailed view (no effect in summary view)',
     )
