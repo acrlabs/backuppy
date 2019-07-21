@@ -1,5 +1,6 @@
 import os
 import re
+import sys
 from datetime import datetime
 from typing import Generator
 from typing import List
@@ -8,6 +9,24 @@ from typing import Pattern
 import dateparser
 
 from backuppy.exceptions import InputParseError
+
+
+def ask_for_confirmation(prompt: str, default: str = 'y'):
+    yes = 'Y' if default.lower() == 'y' else 'y'
+    no = 'n' if default.lower() == 'y' else 'N'
+
+    while True:
+        sys.stdout.write(f'{prompt} [{yes}/{no}] ')
+        sys.stdout.flush()
+        inp = sys.stdin.readline().strip()
+        if inp.lower() in {'y', 'yes'}:
+            return True
+        elif inp.lower() in {'n', 'no'}:
+            return False
+        elif inp == '':
+            return default == 'y'
+        else:
+            print('Unrecognized response; please enter "yes" or "no"')
 
 
 def compile_exclusions(exclusions: str) -> List[Pattern]:

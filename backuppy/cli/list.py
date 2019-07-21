@@ -88,7 +88,6 @@ def main(args: argparse.Namespace) -> None:
 def add_list_parser(subparser) -> None:  # pragma: no cover
     subparser.add_argument(
         dest='like',
-        type=str,
         metavar='QUERY',
         default=None,
         nargs='?',
