@@ -1,14 +1,45 @@
+import argparse
 import os
 import sqlite3
+import time
+from shutil import rmtree
+
+import mock
+import pytest
 
 from backuppy.blob import apply_diff
+from backuppy.cli.restore import main as restore
 from backuppy.io import IOIter
+from backuppy.util import file_walker
 from itests.conftest import _TestFileData
 from itests.conftest import BACKUP_DIR
 from itests.conftest import backup_itest_wrapper
+from itests.conftest import ITEST_CONFIG
 from itests.conftest import ITEST_MANIFEST_PATH
+from itests.conftest import RESTORE_DIR
 
 test_file_history = dict()  # type: ignore
+
+
+RESTORE_ARGS = argparse.Namespace(
+    disable_compression=True,
+    disble_encryption=True,
+    before='now',
+    config=ITEST_CONFIG,
+    dest=RESTORE_DIR,
+    name='data1_backup',
+    sha=None,
+    like='',
+)
+
+
+@pytest.fixture(autouse=True)
+def clear_restore():
+    try:
+        rmtree(RESTORE_DIR)
+        time.sleep(1)  # give the filesystem some time to catch up since we do this for every test
+    except FileNotFoundError:
+        pass
 
 
 def assert_backup_store_correct():
@@ -50,6 +81,17 @@ def assert_backup_store_correct():
                         assert tmp.fd.read() == latest.contents
 
 
+def assert_restore_correct():
+    with mock.patch('backuppy.cli.restore.ask_for_confirmation', return_value=True):
+        restore(RESTORE_ARGS)
+
+    itest_restore_root = 'itests/restore/data1_backup'
+    for f in file_walker(itest_restore_root):
+        abs_file_name = f[f.find(itest_restore_root) + len(itest_restore_root):]
+        with open(f) as restore_file, open(abs_file_name) as orig_file:
+            assert restore_file.read() == orig_file.read()
+
+
 @backup_itest_wrapper(
     test_file_history,
     _TestFileData('foo', 'asdf'),
@@ -61,11 +103,13 @@ def assert_backup_store_correct():
 )
 def test_initial_backup():
     assert_backup_store_correct()
+    assert_restore_correct()
 
 
 @backup_itest_wrapper(test_file_history)
 def test_backup_unchanged():
     assert_backup_store_correct()
+    assert_restore_correct()
 
 
 @backup_itest_wrapper(
@@ -75,6 +119,7 @@ def test_backup_unchanged():
 )
 def test_file_contents_changed():
     assert_backup_store_correct()
+    assert_restore_correct()
 
 
 @backup_itest_wrapper(
@@ -83,6 +128,7 @@ def test_file_contents_changed():
 )
 def test_file_deleted():
     assert_backup_store_correct()
+    assert_restore_correct()
 
 
 @backup_itest_wrapper(
@@ -91,6 +137,7 @@ def test_file_deleted():
 )
 def test_file_restored():
     assert_backup_store_correct()
+    assert_restore_correct()
 
 
 @backup_itest_wrapper(
@@ -99,6 +146,7 @@ def test_file_restored():
 )
 def test_mode_changed():
     assert_backup_store_correct()
+    assert_restore_correct()
 
 
 @backup_itest_wrapper(
@@ -107,6 +155,7 @@ def test_mode_changed():
 )
 def test_contents_changed_after_delete():
     assert_backup_store_correct()
+    assert_restore_correct()
 
 
 @backup_itest_wrapper(

@@ -159,6 +159,7 @@ class BackupStore(metaclass=ABCMeta):
         with IOIter() as encrypted_load_file:
             self._load(src, encrypted_load_file)
             decrypt_and_unpack(encrypted_load_file, dest, TEMP_AES_KEY, TEMP_IV)
+        dest.fd.seek(0)
         return dest
 
     @abstractmethod

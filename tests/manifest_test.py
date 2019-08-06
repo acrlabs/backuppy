@@ -83,12 +83,17 @@ def test_get_entry_file_deleted(mock_manifest):
     assert not entry.mode
 
 
+def test_get_entries_by_sha(mock_manifest):
+    entries = mock_manifest.get_entries_by_sha('1')
+    assert len(entries) == 3
+
+
 def test_search(mock_manifest):
     results = mock_manifest.search()
     assert len(results) == 3
     for path, history in results:
         assert len(history) == 2
-        assert history[0][1] > history[1][1]
+        assert history[0].commit_timestamp > history[1].commit_timestamp
 
 
 def test_search_with_query(mock_manifest):
@@ -104,7 +109,7 @@ def test_search_time_window(mock_manifest):
     assert results[0][0] == '/baz'
     assert results[1][0] == '/foo'
     for path, history in results:
-        assert 60 < history[0][1] < 150
+        assert 60 < history[0].commit_timestamp < 150
 
 
 @pytest.mark.parametrize('limit', [0, 1])

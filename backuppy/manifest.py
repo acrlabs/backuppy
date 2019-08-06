@@ -8,8 +8,7 @@ from typing import Tuple
 import colorlog
 
 logger = colorlog.getLogger(__name__)
-ManifestEntryHistory = List[Tuple['ManifestEntry', int]]
-QueryResponse = Tuple[str, ManifestEntryHistory]
+QueryResponse = Tuple[str, List['ManifestEntry']]
 
 
 class ManifestEntry:
@@ -21,6 +20,7 @@ class ManifestEntry:
         uid: int,
         gid: int,
         mode: int,
+        commit_timestamp: int = None,
     ) -> None:
         self.abs_file_name = abs_file_name
         self.sha = sha
@@ -28,6 +28,11 @@ class ManifestEntry:
         self.uid = uid
         self.gid = gid
         self.mode = mode
+
+        # This is sortof a hack, but if something doesn't have a commit timestamp
+        # and it tries to access this field we want it to crash
+        if commit_timestamp:
+            self.commit_timestamp = commit_timestamp
 
     @classmethod
     def from_row(cls, row: sqlite3.Row) -> 'ManifestEntry':
@@ -39,10 +44,8 @@ class ManifestEntry:
             row['uid'],
             row['gid'],
             row['mode'],
+            row['commit_timestamp'],
         )
-
-
-DiffPair = Tuple[Optional[ManifestEntry], Optional[ManifestEntry]]
 
 
 class Manifest:
@@ -98,6 +101,14 @@ class Manifest:
         latest_row = rows[-1]
         return ManifestEntry.from_row(latest_row)
 
+    def get_entries_by_sha(self, sha: str) -> List[ManifestEntry]:
+        self._cursor.execute(
+            "select * from manifest natural left join diff_pairs where sha like ?",
+            (f'{sha}%',),
+        )
+        rows = self._cursor.fetchall()
+        return [ManifestEntry.from_row(row) for row in rows]
+
     def search(
         self,
         like: str = '',
@@ -131,10 +142,7 @@ class Manifest:
             abs_file_name, history, j = rows[i]['abs_file_name'], [], 0
             while i + j < len(rows) and rows[i + j]['abs_file_name'] == abs_file_name:
                 if not history_limit or j < history_limit:
-                    history.append((
-                        ManifestEntry.from_row(rows[i + j]),
-                        rows[i + j]['commit_timestamp'],
-                    ))
+                    history.append(ManifestEntry.from_row(rows[i + j]))
                 j += 1
 
             results.append((abs_file_name, history))

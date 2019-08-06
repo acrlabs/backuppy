@@ -13,14 +13,16 @@ from backuppy.run import main
 from backuppy.stores.backup_store import MANIFEST_PATH
 
 ITEST_ROOT = 'itests'
+ITEST_CONFIG = os.path.join(ITEST_ROOT, 'itest.conf')
 DATA_DIRS = [os.path.join(ITEST_ROOT, 'data'), os.path.join(ITEST_ROOT, 'data2')]
 BACKUP_DIR = os.path.join(ITEST_ROOT, 'backup')
+RESTORE_DIR = os.path.join(ITEST_ROOT, 'restore')
 ITEST_MANIFEST_PATH = os.path.join(BACKUP_DIR, MANIFEST_PATH)
 BACKUP_ARGS = [
     '--log-level', 'debug',
     '--disable-compression',
     '--disable-encryption',
-    '--config', os.path.join(ITEST_ROOT, 'itest.conf'),
+    '--config', ITEST_CONFIG,
     'backup',
 ]
 
@@ -35,9 +37,6 @@ def compute_sha(string):
 def initialize():
     try:
         [rmtree(d) for d in DATA_DIRS]
-    except FileNotFoundError:
-        pass
-    try:
         rmtree(BACKUP_DIR)
     except FileNotFoundError:
         pass

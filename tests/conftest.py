@@ -2,6 +2,7 @@ from io import BytesIO
 
 import mock
 import pytest
+import staticconf.testing
 
 from backuppy.io import IOIter
 from backuppy.run import setup_logging
@@ -17,6 +18,31 @@ def _make_stat_fn(io_iter):
 @pytest.fixture(autouse=True, scope='session')
 def setup_logging_for_tests():
     setup_logging('debug2')
+
+
+@pytest.fixture(autouse=True)
+def test_config_file():
+    config = {
+        'exclusions': ['dont_back_this_up'],
+        'backups': {
+            'backup1': {
+                'directories': ['/path/0'],
+                'exclusions': ['foo'],
+            },
+            'backup2': {
+                'directories': ['/path/1', '/path/2'],
+                'exclusions': ['bar']
+            },
+        }
+    }
+    with staticconf.testing.PatchConfiguration(config, flatten=False), \
+            staticconf.testing.PatchConfiguration(
+                config['backups']['backup1'],
+                namespace='backup1'), \
+            staticconf.testing.PatchConfiguration(
+                config['backups']['backup2'],
+                namespace='backup2'):
+        yield
 
 
 @pytest.fixture

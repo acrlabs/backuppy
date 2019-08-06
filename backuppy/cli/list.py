@@ -11,6 +11,7 @@ from tabulate import tabulate
 from backuppy.args import subparser
 from backuppy.manifest import QueryResponse
 from backuppy.stores import get_backup_store
+from backuppy.util import format_sha
 from backuppy.util import format_time
 from backuppy.util import parse_time
 
@@ -19,42 +20,40 @@ SUMMARY_HEADERS: List[str] = ['filename', 'versions', 'last backup time']
 DETAILS_HEADERS: List[str] = ['sha', 'uid', 'gid', 'permissions', 'backup time']
 
 
-def _find_root_prefix(abs_file_name: str, backup_name: str) -> str:
+def _split_root_prefix(abs_file_name: str, backup_name: str) -> Tuple[str, str]:
     for directory in staticconf.read_list('directories', namespace=backup_name):
         abs_root = os.path.abspath(directory) + os.path.sep
         if abs_file_name.startswith(abs_root):
-            return abs_root
+            return abs_root, abs_file_name[len(abs_root):]
     raise ValueError(f'{abs_file_name} does not start with any directory prefix')
 
 
 def _print_summary(backup_name: str, search_results: List[QueryResponse]) -> None:
     contents: List[Tuple[str, int, str]] = []
-    root_directory = _find_root_prefix(search_results[0][0], backup_name)
 
     for i, (abs_file_name, history) in enumerate(search_results):
-        filename = abs_file_name[len(root_directory):]
-        backup_time_str = format_time(history[0][1])
+        root_directory, filename = _split_root_prefix(search_results[i][0], backup_name)
+        backup_time_str = format_time(history[0].commit_timestamp)
         contents.append((filename, len(history), backup_time_str))
         if i == len(search_results) - 1 or not search_results[i+1][0].startswith(root_directory):
             print(f'\n{DASHES}\n{root_directory}\n{DASHES}')
             print(tabulate(contents, headers=SUMMARY_HEADERS))
             if i != len(search_results) - 1:
-                root_directory = _find_root_prefix(search_results[i+1][0], backup_name)
                 contents = []
     print('')
 
 
-def _print_details(backup_name: str, search_results: List[QueryResponse], sha_len: int) -> None:
+def _print_details(backup_name: str, search_results: List[QueryResponse]) -> None:
     for abs_file_name, history in search_results:
         contents = [
             (
-                (h.sha[:sha_len] + '...' if h.sha else None),
+                format_sha(h.sha),
                 h.uid,
                 h.gid,
                 (stat.filemode(h.mode) if h.mode else '<deleted>'),
-                format_time(t),
+                format_time(h.commit_timestamp),
             )
-            for h, t in history
+            for h in history
         ]
         print(f'\n{DASHES}\n{abs_file_name}\n{DASHES}')
         print(tabulate(contents, headers=DETAILS_HEADERS))
@@ -62,6 +61,7 @@ def _print_details(backup_name: str, search_results: List[QueryResponse], sha_le
 
 
 def main(args: argparse.Namespace) -> None:
+    staticconf.DictConfiguration({'sha_length': args.sha_length})
     after_timestamp = parse_time(args.after) if args.after else 0
     before_timestamp = parse_time(args.before) if args.before else int(time.time())
 
@@ -81,7 +81,7 @@ def main(args: argparse.Namespace) -> None:
     if not args.details:
         _print_summary(args.name, search_results)
     else:
-        _print_details(args.name, search_results, args.sha_length)
+        _print_details(args.name, search_results)
 
 
 @subparser('list', 'list the contents of a backup set', main)

@@ -1,6 +1,7 @@
 import argparse
 import os
 import time
+from typing import List
 from typing import Optional
 from typing import Tuple
 
@@ -10,29 +11,72 @@ from tabulate import tabulate
 from backuppy.args import subparser
 from backuppy.blob import apply_diff
 from backuppy.io import IOIter
+from backuppy.manifest import ManifestEntry
 from backuppy.stores import get_backup_store
+from backuppy.stores.backup_store import BackupStore
 from backuppy.util import ask_for_confirmation
+from backuppy.util import format_sha
 from backuppy.util import format_time
 from backuppy.util import parse_time
 
-RESTORE_LIST_HEADERS = ['filename', 'backup time']
+RESTORE_LIST_HEADERS = ['filename', 'sha', 'backup time']
 
 
-def _parse_destination(dest_input: Optional[str]) -> Tuple[str, str]:
-    if dest_input:
-        destination = os.path.abspath(dest_input)
-        if os.path.isabs(dest_input):
-            destination_str = dest_input
-        else:
-            destination_str = os.path.join('.', os.path.normpath(dest_input))
-    else:
-        destination = os.path.abspath('.')
-        destination_str = 'the current directory'
+def _parse_destination(dest_input: Optional[str], backup_name: str) -> Tuple[str, str]:
+    dest_input = dest_input or '.'
+    destination_str = os.path.join(os.path.normpath(dest_input), backup_name)
+    destination = os.path.abspath(destination_str)
+    if dest_input != '.' and not os.path.isabs(destination_str):
+        destination_str = os.path.join('.', destination_str)
     return destination, destination_str
 
 
+def _confirm_restore(
+    files_to_restore: List[ManifestEntry],
+    destination: str,
+    destination_str: str,
+) -> bool:
+    print('')
+    if os.path.exists(destination):
+        print(
+            f'WARNING: {destination_str} already exists.  '
+            'Files in this location may be overwritten.'
+        )
+    print(f'Backuppy will restore the following files to {destination_str}:\n')
+    print(tabulate([
+        [
+            f.abs_file_name,
+            format_sha(f.sha),
+            format_time(f.commit_timestamp),
+        ]
+        for f in files_to_restore],
+        headers=RESTORE_LIST_HEADERS,
+    ))
+    print('')
+    return ask_for_confirmation('Continue?')
+
+
+def _restore(files_to_restore: List[ManifestEntry], destination: str, backup_store: BackupStore):
+    print('Beginning restore...')
+    os.makedirs(destination, exist_ok=True)
+    for f in files_to_restore:
+        restore_file_name = os.path.join(destination, f.abs_file_name[1:])
+
+        with IOIter() as orig_file, \
+                IOIter() as diff_file, \
+                IOIter(restore_file_name) as restore_file:
+
+            if f.base_sha:
+                backup_store.load(f.base_sha, orig_file)
+                backup_store.load(f.sha, diff_file)
+                apply_diff(orig_file, diff_file, restore_file)
+            else:
+                backup_store.load(f.sha, restore_file)
+    print('Restore complete!\n')
+
+
 def main(args: argparse.Namespace) -> None:
-    destination, destination_str = _parse_destination(args.dest)
+    destination, destination_str = _parse_destination(args.dest, args.name)
     before_timestamp = parse_time(args.before) if args.before else int(time.time())
 
     staticconf.YamlConfiguration(args.config, flatten=False)
@@ -41,41 +85,23 @@ def main(args: argparse.Namespace) -> None:
     backup_store = get_backup_store(args.name)
 
     with backup_store.open_manifest():
+        files_to_restore: List[ManifestEntry]
         if args.sha:
-            raise NotImplementedError('not yet working TODO')
+            files_to_restore = backup_store.manifest.get_entries_by_sha(args.sha)
+            if not files_to_restore:
+                raise ValueError(f'Sha {args.sha} does not match anything in the store')
 
-        search_results = backup_store.manifest.search(
-            like=args.like,
-            before_timestamp=before_timestamp,
-            history_limit=1,
-        )
+        else:
+            search_results = backup_store.manifest.search(
+                like=args.like,
+                before_timestamp=before_timestamp,
+                history_limit=1,
+            )
+            # Restore the most recent version of all files that haven't been deleted
+            files_to_restore = [h[-1] for _, h in search_results if h[-1].sha]
 
-        print(f'\nBackuppy will restore the following files to {destination_str}:\n')
-        print(tabulate([
-            [f, format_time(h[-1][1])] for f, h in search_results],
-            headers=RESTORE_LIST_HEADERS,
-        ))
-        print('')
-        if not ask_for_confirmation('Continue?'):
-            return
-        print('Beginning restore...')
-
-        os.makedirs(destination, exist_ok=True)
-        for abs_file_name, history in search_results:
-            entry = history[-1][0]
-            restore_file_name = os.path.join(destination, os.path.basename(abs_file_name))
-            with IOIter() as orig_file, \
-                    IOIter() as diff_file, \
-                    IOIter(restore_file_name) as restore_file:
-
-                if entry.base_sha:
-                    backup_store.load(entry.base_sha, orig_file)
-                    backup_store.load(entry.sha, diff_file)
-                    apply_diff(orig_file, diff_file, restore_file)
-                else:
-                    backup_store.load(entry.sha, restore_file)
-
-        print('Restore complete!\n')
+        if _confirm_restore(files_to_restore, destination, destination_str):
+            _restore(files_to_restore, destination, backup_store)
 
 
 @subparser('restore', 'restore files from a backup set', main)

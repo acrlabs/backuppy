@@ -5,42 +5,36 @@ import mock
 import pytest
 import staticconf
 
-from backuppy.cli.list import _find_root_prefix
 from backuppy.cli.list import _print_details
 from backuppy.cli.list import _print_summary
+from backuppy.cli.list import _split_root_prefix
 from backuppy.cli.list import main
 from backuppy.manifest import ManifestEntry
 from backuppy.util import format_time
 
 
 @pytest.fixture
-def backup_configs():
-    for name, config in staticconf.read('backups').items():
-        staticconf.DictConfiguration(config, namespace=name)
-
-
-@pytest.fixture
 def mock_search_results():
     return [
         ('/path/1/file1', [
-            (ManifestEntry('/path/1/file1', 'ab1defabcdefabcdef', None, 1000, 1000, 12345), 100),
-            (ManifestEntry('/path/1/file1', 'ab2defabcdefabcde1', None, 1000, 1000, 12345), 75),
-            (ManifestEntry('/path/1/file1', 'ab3defabcdefabcde2', None, 1000, 1000, 12345), 20),
+            ManifestEntry('/path/1/file1', 'ab1defabcdefabcdef', None, 1000, 1000, 12345, 100),
+            ManifestEntry('/path/1/file1', 'ab2defabcdefabcde1', None, 1000, 1000, 12345, 75),
+            ManifestEntry('/path/1/file1', 'ab3defabcdefabcde2', None, 1000, 1000, 12345, 20),
         ]),
         ('/path/2/file2', [
-            (ManifestEntry('/path/2/file2', '1b1defabcdefabcdef', None, 1000, 1000, 12345), 105),
-            (ManifestEntry('/path/2/file2', '1b2defabcdefabcde1', None, 1000, 1000, 12345), 65),
+            ManifestEntry('/path/2/file2', '1b1defabcdefabcdef', None, 1000, 1000, 12345, 105),
+            ManifestEntry('/path/2/file2', '1b2defabcdefabcde1', None, 1000, 1000, 12345, 65),
         ]),
     ]
 
 
-def test_find_root_prefix(backup_configs):
-    assert _find_root_prefix('/path/1/the_file', 'backup2') == '/path/1/'
+def test_split_root_prefix():
+    assert _split_root_prefix('/path/1/the_file', 'backup2') == ('/path/1/', 'the_file')
 
 
-def test_find_root_prefix_not_present(backup_configs):
+def test_split_root_prefix_not_present():
     with pytest.raises(ValueError):
-        assert _find_root_prefix('/path/0/the_file', 'backup2')
+        _split_root_prefix('/path/0/the_file', 'backup2')
 
 
 def test_print_summary(mock_search_results, capsys):
@@ -51,7 +45,8 @@ def test_print_summary(mock_search_results, capsys):
 
 
 def test_print_details(mock_search_results, capsys):
-    _print_details('backup2', mock_search_results, sha_len=5)
+    with staticconf.testing.MockConfiguration({'sha_length': 5}):
+        _print_details('backup2', mock_search_results)
     out, err = capsys.readouterr()
     assert re.search(r'ab1de\.\.\..*' + format_time(100), out)
     assert re.search(r'ab2de\.\.\..*' + format_time(75), out)
@@ -64,7 +59,7 @@ def test_print_details(mock_search_results, capsys):
     (None, None, False),
     ('1969-12-31 16:00:10', '1969-12-31 16:05:00', True)
 ])
-def test_main(backup_configs, after, before, details):
+def test_main(after, before, details):
     args = argparse.Namespace(
         after=after,
         before=before,

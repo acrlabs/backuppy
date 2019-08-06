@@ -7,6 +7,7 @@ from typing import List
 from typing import Pattern
 
 import dateparser
+import staticconf
 
 from backuppy.exceptions import InputParseError
 
@@ -40,6 +41,11 @@ def file_walker(path, on_error=None) -> Generator[str, None, None]:
     for root, dirs, files in os.walk(path, onerror=on_error):
         for f in files:
             yield os.path.join(root, f)
+
+
+def format_sha(sha: str):
+    sha_len = staticconf.read_int('sha_length', default=8)
+    return sha[:sha_len] + '...' if sha else None
 
 
 def format_time(timestamp: int) -> str:
