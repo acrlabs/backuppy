@@ -57,7 +57,7 @@ def test_print_details(mock_search_results, capsys):
 
 @pytest.mark.parametrize('after,before,details', [
     (None, None, False),
-    ('1969-12-31 16:00:10', '1969-12-31 16:05:00', True)
+    ('2009-12-31T16:00:10+00:00', '2009-12-31T16:05:00+00:00', True)
 ])
 def test_main(after, before, details):
     args = argparse.Namespace(
@@ -79,8 +79,8 @@ def test_main(after, before, details):
         backup_store = mock_get_store.return_value
         main(args)
         assert backup_store.manifest.search.call_args == mock.call(
-            after_timestamp=(0 if not after else 10),
-            before_timestamp=(1000 if not before else 300),
+            after_timestamp=(0 if not after else 1262275210),
+            before_timestamp=(1000 if not before else 1262275500),
             file_limit=None,
             history_limit=None,
             like=None,

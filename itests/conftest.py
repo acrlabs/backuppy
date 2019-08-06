@@ -7,6 +7,7 @@ from contextlib import ExitStack
 from hashlib import sha256
 from shutil import rmtree
 
+import mock
 import pytest
 
 from backuppy.run import main
@@ -18,6 +19,7 @@ DATA_DIRS = [os.path.join(ITEST_ROOT, 'data'), os.path.join(ITEST_ROOT, 'data2')
 BACKUP_DIR = os.path.join(ITEST_ROOT, 'backup')
 RESTORE_DIR = os.path.join(ITEST_ROOT, 'restore')
 ITEST_MANIFEST_PATH = os.path.join(BACKUP_DIR, MANIFEST_PATH)
+ITEST_SCRATCH = os.path.join(ITEST_ROOT, 'scratch')
 BACKUP_ARGS = [
     '--log-level', 'debug',
     '--disable-compression',
@@ -38,11 +40,13 @@ def initialize():
     try:
         [rmtree(d) for d in DATA_DIRS]
         rmtree(BACKUP_DIR)
+        rmtree(ITEST_SCRATCH)
     except FileNotFoundError:
         pass
 
     [os.makedirs(d) for d in DATA_DIRS]
     os.makedirs(BACKUP_DIR)
+    os.makedirs(ITEST_SCRATCH)
 
 
 class ItestException(Exception):
@@ -92,6 +96,8 @@ def make_trace_func(search_string, side_effect):
             except TypeError:
                 return None
             if module and not module.__name__.startswith('backuppy'):
+                if not hasattr(frame, 'f_trace_lines'):
+                    return None
                 frame.f_trace_lines = False
             return trace_func
 
@@ -130,9 +136,14 @@ def backup_itest_wrapper(
                 sys.settrace(make_trace_func(test_case.__name__, side_effect[0]))
             else:
                 sys.settrace(lambda a, b, c: None)
-            with context:
-                main(BACKUP_ARGS)
-            test_case(*args, **kwargs)
+            with mock.patch('backuppy.stores.backup_store.get_scratch_dir') as mock_scratch, \
+                    mock.patch('backuppy.util.shuffle') as mock_shuffle:
+                # make sure tests are repeatable, no directory-shuffling
+                mock_shuffle.side_effect = lambda l: l.sort()
+                mock_scratch.return_value = ITEST_SCRATCH
+                with context:
+                    main(BACKUP_ARGS)
+                test_case(*args, **kwargs)
 
         return wrapper
     return decorator

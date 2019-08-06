@@ -1,3 +1,5 @@
+[![Build Status](https://travis-ci.com/drmorr0/backuppy.svg?branch=master)](https://travis-ci.com/drmorr0/backuppy)
+
 # Backuppy
 
 Open-source, diff-based, encrypted backup software

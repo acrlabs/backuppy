@@ -30,15 +30,15 @@ close the manifest
 ## Manifest Trace
 
 ```
-a file object for the unlocked manifest is created in BACKUPPY_SCRATCH
+a file object for the unlocked manifest is created in get_scratch_dir()
 the manifest is loaded from the backup store into the unlocked manifest file
   we create a TemporaryFile locally containing the encrypted manifest
   we decrypt and unpack the TemporaryFile contents into the unlocked manifest file
 sqlite opens the unlocked manifest file
 ... backup runs ...
 if the Manifest has changed, we save the unlocked manifest file into the store
-  we create a new file at BACKUPPY_SCRATCH/manifest.sqlite
-  we compress and encrypt the unlocked manifest file into BACKUPPY_SCRATCH/manifest.sqlite
+  we create a new file at get_scratch_dir()/manifest.sqlite
+  we compress and encrypt the unlocked manifest file into get_scratch_dir()/manifest.sqlite
   the backup_store then atomically saves the locked manifest file into the store
 we remove the unlocked manifest file
 ```
@@ -48,8 +48,8 @@ we remove the unlocked manifest file
 ```
 the file to be backed up is copied into a TemporaryFile
 the TemporaryFile is saved into the store
-  we create a new file at BACKUPPY_SCRATCH/sha_to_path
-  we compress and encrypt the contents of the TemporaryFile into BACKUPPY_SCRATCH/sha_to_path
+  we create a new file at get_scratch_dir()/sha_to_path
+  we compress and encrypt the contents of the TemporaryFile into get_scratch_dir()/sha_to_path
   the backup_store then atomically saves the encrypted file into the store
 the file metadata is inserted into the unlocked manifest and committed
 ```
@@ -62,8 +62,8 @@ the original file is loaded from the store into TemporaryFile1
   we decrypt and unpack the TemporaryFile2 into TemporaryFile1
 the diff between the new file and the original file is written to TemporaryFile3
 we save TemporaryFile3 into the backup store
-  we create a new file at BACKUPPY_SCRATCH/sha_to_path
-  we compress and encrypt the contents of TemporaryFile3 into BACKUPPY_SCRATCH/sha_to_path
+  we create a new file at get_scratch_dir()/sha_to_path
+  we compress and encrypt the contents of TemporaryFile3 into get_scratch_dir()/sha_to_path
   the backup_store then atomically saves the encrypted file into the store
 the file metadata is inserted into the unlocked manifest and committed
 ```

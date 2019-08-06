@@ -1,8 +1,11 @@
+import os
+
 import mock
 import pytest
 
 from backuppy.exceptions import ManifestLockedException
 from backuppy.stores.backup_store import BackupStore
+from backuppy.util import get_scratch_dir
 from tests.conftest import count_matching_log_lines
 
 
@@ -37,7 +40,8 @@ def test_init(backup_store):
 
 
 @pytest.mark.parametrize('manifest_changed', [True, False])
-def test_open_manifest(caplog, backup_store, manifest_changed):
+def test_open_manifest(fs, caplog, backup_store, manifest_changed):
+    os.makedirs(get_scratch_dir())
     with mock.patch('backuppy.stores.backup_store.Manifest') as mock_manifest, \
             mock.patch('backuppy.stores.backup_store.os.remove') as mock_remove:
         mock_manifest.return_value.changed = manifest_changed

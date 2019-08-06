@@ -72,11 +72,11 @@ def main(args: argparse.Namespace) -> None:
 
     with backup_store.open_manifest():
         search_results = backup_store.manifest.search(
-            like=args.like,
             after_timestamp=after_timestamp,
             before_timestamp=before_timestamp,
             file_limit=args.file_limit,
             history_limit=args.history_limit,
+            like=args.like,
         )
     if not args.details:
         _print_summary(args.name, search_results)

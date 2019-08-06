@@ -19,12 +19,12 @@ from backuppy.io import io_copy
 from backuppy.io import IOIter
 from backuppy.manifest import Manifest
 from backuppy.manifest import ManifestEntry
+from backuppy.util import get_scratch_dir
 from backuppy.util import path_join
 from backuppy.util import sha_to_path
 from tests.crypto_test import TEMP_AES_KEY  # TODO DO NOT USE IN PRODUCTION
 from tests.crypto_test import TEMP_IV  # TODO DO NOT USE IN PRODUCTION
 
-BACKUPPY_SCRATCH = '/tmp/backuppy'
 MANIFEST_PATH = 'manifest.sqlite'
 logger = colorlog.getLogger(__name__)
 
@@ -56,15 +56,15 @@ class BackupStore(metaclass=ABCMeta):
         circumvent some of the IOIter functionality and do it ourselves.  We wrap this in a
         context manager so this can be abstracted away and still ensure that proper cleanup happens.
         """
-        rmtree(BACKUPPY_SCRATCH)
-        os.makedirs(BACKUPPY_SCRATCH, exist_ok=True)
+        rmtree(get_scratch_dir())
+        os.makedirs(get_scratch_dir(), exist_ok=True)
 
         # Create a new temporary file to store the decrypted manifest; we append a UUID to
         # the filename to ensure some measure of certainty that this file isn't already going
         # to exist
 
         unlocked_manifest_filename = path_join(
-            BACKUPPY_SCRATCH,
+            get_scratch_dir(),
             f'.manifest.sqlite.{uuid4().hex}',
         )
         logger.debug(f'Unlocked manifest located at {unlocked_manifest_filename}')
@@ -146,7 +146,7 @@ class BackupStore(metaclass=ABCMeta):
             dest = sha_to_path(dest)
 
         # This can't be a TemporaryFile because the backup_store needs to save it atomically
-        encrypted_save_file_path = path_join(BACKUPPY_SCRATCH, dest)
+        encrypted_save_file_path = path_join(get_scratch_dir(), dest)
 
         with IOIter(encrypted_save_file_path) as encrypted_save_file:
             compress_and_encrypt(src, encrypted_save_file, TEMP_AES_KEY, TEMP_IV)

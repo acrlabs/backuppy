@@ -2,6 +2,8 @@ import os
 import re
 import sys
 from datetime import datetime
+from random import shuffle
+from tempfile import gettempdir
 from typing import Generator
 from typing import List
 from typing import Pattern
@@ -39,6 +41,12 @@ def file_walker(path, on_error=None) -> Generator[str, None, None]:
     relative to the "path" value passed in.
     """
     for root, dirs, files in os.walk(path, onerror=on_error):
+        # os.walk allows you to modify the dirs in-place to control the order in which
+        # things are visited; we do that here to ensure that we're not always starting
+        # our backup in the same place and going through in the same order, which could
+        # result in the later things never getting backed up if there is some systemic crash
+        shuffle(dirs)
+        shuffle(files)
         for f in files:
             yield os.path.join(root, f)
 
@@ -50,6 +58,10 @@ def format_sha(sha: str):
 
 def format_time(timestamp: int) -> str:
     return datetime.fromtimestamp(timestamp).strftime('%Y-%m-%d %H:%M:%S')
+
+
+def get_scratch_dir() -> str:
+    return os.path.join(gettempdir(), 'backuppy')
 
 
 def parse_time(input_str: str) -> int:
