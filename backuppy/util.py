@@ -6,10 +6,10 @@ from random import shuffle
 from tempfile import gettempdir
 from typing import Generator
 from typing import List
+from typing import Optional
 from typing import Pattern
 
 import dateparser
-import staticconf
 
 from backuppy.exceptions import InputParseError
 
@@ -51,9 +51,8 @@ def file_walker(path, on_error=None) -> Generator[str, None, None]:
             yield os.path.join(root, f)
 
 
-def format_sha(sha: str):
-    sha_len = staticconf.read_int('sha_length', default=8)
-    return sha[:sha_len] + '...' if sha else None
+def format_sha(sha: str, sha_length: int) -> Optional[str]:
+    return sha[:sha_length] + '...' if sha else None
 
 
 def format_time(timestamp: int) -> str:

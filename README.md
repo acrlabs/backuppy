@@ -13,13 +13,9 @@ python -m backuppy.run backup
 ## Configuration Reference
 
 ```
-exclusions:  # global list of regex patterns that you don't want to back up
-  - pattern1
-  - pattern2
-  - ...
-
 backups:
   backup_1:  # name of the backup set
+    key_file: /path/to/encryption/key_file  # required unless disable_encryption is set
     exclusions:  # list of regex patterns that you don't want to back up for this backup
       - pattern1
       - pattern2
@@ -31,6 +27,9 @@ backups:
     protocol:  # where to back up the files in this set
       type: (local|ssh|rsync|s3)
       <protocol-specific-options>
+    options:
+      disable_encryption: (true|false)
+      disable_compression: (true|false)
 ```
 
 Currently the `local` protocol is the only supported protocol.  It takes a single parameter,

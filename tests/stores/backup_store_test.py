@@ -21,16 +21,19 @@ def mock_save_load(request):
 
 @pytest.fixture
 def backup_store(dummy_save_load=True):
+    backup_name = 'fake_backup'
+
     class DummyBackupStore(BackupStore):
         _save = mock.Mock()
         _load = mock.Mock()
+
     with mock.patch('backuppy.stores.backup_store.IOIter') as mock_io_iter:
         mock_io_iter.return_value.__enter__.return_value.stat.return_value = mock.Mock(
             st_uid=1000,
             st_gid=1000,
             st_mode=12345,
         )
-        store = DummyBackupStore('fake_backup')
+        store = DummyBackupStore(backup_name)
         store._manifest = mock.Mock()
         yield store
 

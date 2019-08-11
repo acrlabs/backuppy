@@ -38,3 +38,4 @@ __pycache__
 
 itests/backup
 itests/data*
+itests/scratch

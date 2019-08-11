@@ -63,19 +63,6 @@ def parse_args(
         action='version',
         version='backuppy' + __version__
     )
-
-    # Top-level arguments because if a backup has been performed with encryption/compression
-    # enabled, they can't be disabled later (or when doing a restore)
-    root_parser.add_argument(
-        '--disable-compression',
-        action='store_true',
-        help='Turn off GZIP\'ed backup blobs',
-    )
-    root_parser.add_argument(
-        '--disable-encryption',
-        action='store_true',
-        help='Turn off encrypted backup blobs',
-    )
     root_parser.add_argument(
         '--config',
         default='backuppy.conf',

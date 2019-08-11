@@ -22,8 +22,6 @@ ITEST_MANIFEST_PATH = os.path.join(BACKUP_DIR, MANIFEST_PATH)
 ITEST_SCRATCH = os.path.join(ITEST_ROOT, 'scratch')
 BACKUP_ARGS = [
     '--log-level', 'debug',
-    '--disable-compression',
-    '--disable-encryption',
     '--config', ITEST_CONFIG,
     'backup',
 ]

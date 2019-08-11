@@ -3,7 +3,6 @@ import re
 
 import mock
 import pytest
-import staticconf
 
 from backuppy.cli.list import _print_details
 from backuppy.cli.list import _print_summary
@@ -45,8 +44,7 @@ def test_print_summary(mock_search_results, capsys):
 
 
 def test_print_details(mock_search_results, capsys):
-    with staticconf.testing.MockConfiguration({'sha_length': 5}):
-        _print_details('backup2', mock_search_results)
+    _print_details('backup2', mock_search_results, 5)
     out, err = capsys.readouterr()
     assert re.search(r'ab1de\.\.\..*' + format_time(100), out)
     assert re.search(r'ab2de\.\.\..*' + format_time(75), out)

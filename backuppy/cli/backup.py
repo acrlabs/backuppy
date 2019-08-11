@@ -33,7 +33,8 @@ def _scan_directory(
 
         # Skip files that match any of the specified regular expressions
         matched_patterns = [
-            pattern.pattern for pattern in exclusions if pattern.search(abs_file_name)]
+            pattern.pattern for pattern in exclusions if pattern.search(abs_file_name)
+        ]
         if matched_patterns:
             logger.info(f'{abs_file_name} matched exclusion(s) "{matched_patterns}"; skipping')
             continue
@@ -56,11 +57,7 @@ def _scan_directory(
 
 def main(args: argparse.Namespace):
     """ entry point for the 'backup' subcommand """
-    staticconf.YamlConfiguration(args.config, flatten=False)
-    global_exclusions = compile_exclusions(staticconf.read_list('exclusions', []))
-
     for backup_name, backup_config in staticconf.read('backups').items():
-        staticconf.DictConfiguration(backup_config, namespace=backup_name)
         logger.info(f'Starting backup for {backup_name}')
         backup_store = get_backup_store(backup_name)
 
@@ -68,9 +65,9 @@ def main(args: argparse.Namespace):
             marked_files: Set[str] = set()
             for base_path in staticconf.read_list('directories', namespace=backup_name):
                 abs_base_path = os.path.abspath(base_path)
-                local_exclusions = compile_exclusions(
-                    staticconf.read_list('exclusions', [], namespace=backup_name))
-                exclusions = global_exclusions + local_exclusions
+                exclusions = compile_exclusions(
+                    staticconf.read_list('exclusions', [], namespace=backup_name)
+                )
                 marked_files |= _scan_directory(abs_base_path, backup_store, exclusions)
 
             for abs_file_name in backup_store.manifest.files() - marked_files:

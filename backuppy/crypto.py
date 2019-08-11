@@ -1,8 +1,9 @@
 import gzip
 from typing import Callable
+from typing import Optional
+from typing import Tuple
 
 import colorlog
-import staticconf
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives.ciphers import Cipher
 from cryptography.hazmat.primitives.ciphers.algorithms import AES
@@ -12,6 +13,7 @@ from backuppy.io import IOIter
 
 logger = colorlog.getLogger(__name__)
 GZIP_START = b'\x1f\x8b'
+KeyPair = Tuple[bytes, bytes]
 
 
 def identity(x: bytes, y: int = 0) -> bytes:
@@ -19,19 +21,22 @@ def identity(x: bytes, y: int = 0) -> bytes:
     return x
 
 
-def compress_and_encrypt(input_file: IOIter, output_file: IOIter, key: bytes, iv: bytes) -> None:
+def compress_and_encrypt(
+    input_file: IOIter,
+    output_file: IOIter,
+    key: Optional[KeyPair],
+    use_compression: bool,
+) -> None:
     """ Read data from an open file descriptor, and write the compressed, encrypted data to another
     file descriptor
 
     :param input_file: an IOIter object to read plaintext data from
     :param output_file: an IOIter object to write compressed ciphertext to
     """
-    zip_fn: Callable[[bytes], bytes] = gzip.compress if staticconf.read_bool(
-        'use_compression') else identity
+    zip_fn: Callable[[bytes], bytes] = gzip.compress if use_compression else identity
     encrypt_fn: Callable[[bytes], bytes] = (
-        Cipher(AES(key), OFB(iv), backend=default_backend()).encryptor().update
-        if staticconf.read_bool('use_encryption')
-        else identity
+        Cipher(AES(key[0]), OFB(key[1]), backend=default_backend()).encryptor().update
+        if key else identity
     )
     writer = output_file.writer(); next(writer)
     logger.debug2('starting to compress')
@@ -43,7 +48,12 @@ def compress_and_encrypt(input_file: IOIter, output_file: IOIter, key: bytes, iv
         writer.send(block)
 
 
-def decrypt_and_unpack(input_file: IOIter, output_file: IOIter, key: bytes, iv: bytes) -> None:
+def decrypt_and_unpack(
+    input_file: IOIter,
+    output_file: IOIter,
+    key: Optional[KeyPair],
+    use_compression: bool,
+) -> None:
     """ Read encrypted, GZIPed data from an open file descriptor, and write the decoded data to
     another file descriptor
 
@@ -52,9 +62,8 @@ def decrypt_and_unpack(input_file: IOIter, output_file: IOIter, key: bytes, iv: 
     """
     decrypted_data = b''
     decrypt_fn: Callable[[bytes], bytes] = (
-        Cipher(AES(key), OFB(iv), backend=default_backend()).decryptor().update
-        if staticconf.read_bool('use_encryption')
-        else identity
+        Cipher(AES(key[0]), OFB(key[1]), backend=default_backend()).decryptor().update
+        if key else identity
     )
     writer = output_file.writer(); next(writer)
     for block in input_file.reader():
@@ -64,7 +73,7 @@ def decrypt_and_unpack(input_file: IOIter, output_file: IOIter, key: bytes, iv: 
         # gzip.decompress throws an EOFError if we pass in partial data, so here we need to
         # decompress each GZIP'ed member individually; to find a complete member we look for
         # the start of the next GZIP blob, which starts with a known constant byte-pair
-        if staticconf.read_bool('use_compression'):
+        if use_compression:
             index = decrypted_data.find(GZIP_START, 2)
             if index != -1:
                 block = gzip.decompress(decrypted_data[:index])
@@ -78,7 +87,6 @@ def decrypt_and_unpack(input_file: IOIter, output_file: IOIter, key: bytes, iv: 
 
     # Decompress and write out the last block
     if decrypted_data:
-        block = gzip.decompress(decrypted_data) if staticconf.read_bool(
-            'use_compression') else decrypted_data
+        block = gzip.decompress(decrypted_data) if use_compression else decrypted_data
         logger.debug2(f'unzip_fn returned {len(block)} bytes')
         writer.send(block)

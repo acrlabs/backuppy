@@ -3,9 +3,9 @@ from typing import List
 from typing import Optional
 
 import colorlog
-import staticconf
 
 from backuppy.args import parse_args
+from backuppy.config import setup_config
 
 logger = colorlog.getLogger(__name__)
 DEBUG2 = logging.DEBUG - 5
@@ -43,10 +43,7 @@ def setup_logging(log_level_str: str = 'info') -> None:
 def main(arg_list: Optional[List[str]] = None) -> None:
     args = parse_args("BackupPY - an open-source backup tool", arg_list)
     setup_logging(args.log_level)
-    staticconf.DictConfiguration({
-        'use_encryption': not args.disable_encryption,
-        'use_compression': not args.disable_compression,
-    })
+    setup_config(args.config)
     args.entrypoint(args)
 
 

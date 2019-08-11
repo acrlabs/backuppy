@@ -22,8 +22,7 @@ from backuppy.manifest import ManifestEntry
 from backuppy.util import get_scratch_dir
 from backuppy.util import path_join
 from backuppy.util import sha_to_path
-from tests.crypto_test import TEMP_AES_KEY  # TODO DO NOT USE IN PRODUCTION
-from tests.crypto_test import TEMP_IV  # TODO DO NOT USE IN PRODUCTION
+from tests.crypto_test import TMP_KEYPAIR  # TODO DO NOT USE IN PRODUCTION
 
 MANIFEST_PATH = 'manifest.sqlite'
 logger = colorlog.getLogger(__name__)
@@ -148,17 +147,29 @@ class BackupStore(metaclass=ABCMeta):
         # This can't be a TemporaryFile because the backup_store needs to save it atomically
         encrypted_save_file_path = path_join(get_scratch_dir(), dest)
 
+        use_compression = not self.config.read_bool('options.disable_compression', default=False)
+        encryption_key = (
+            TMP_KEYPAIR
+            if not self.config.read_bool('options.disable_encryption', default=False)
+            else None
+        )
         with IOIter(encrypted_save_file_path) as encrypted_save_file:
-            compress_and_encrypt(src, encrypted_save_file, TEMP_AES_KEY, TEMP_IV)
+            compress_and_encrypt(src, encrypted_save_file, encryption_key, use_compression)
         self._save(encrypted_save_file_path, dest, overwrite=is_manifest)  # test_f1_crash_file_save
 
     def load(self, src: str, dest: IOIter, is_manifest: bool = False) -> IOIter:
         """ Wrapper around the _load function that converts the SHA to a path """
+        use_compression = not self.config.read_bool('options.disable_compression', default=False)
+        encryption_key = (
+            TMP_KEYPAIR
+            if not self.config.read_bool('options.disable_encryption', default=False)
+            else None
+        )
         if not is_manifest:
             src = sha_to_path(src)
         with IOIter() as encrypted_load_file:
             self._load(src, encrypted_load_file)
-            decrypt_and_unpack(encrypted_load_file, dest, TEMP_AES_KEY, TEMP_IV)
+            decrypt_and_unpack(encrypted_load_file, dest, encryption_key, use_compression)
         dest.fd.seek(0)
         return dest
 

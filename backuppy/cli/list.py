@@ -43,11 +43,11 @@ def _print_summary(backup_name: str, search_results: List[QueryResponse]) -> Non
     print('')
 
 
-def _print_details(backup_name: str, search_results: List[QueryResponse]) -> None:
+def _print_details(backup_name: str, search_results: List[QueryResponse], sha_length: int) -> None:
     for abs_file_name, history in search_results:
         contents = [
             (
-                format_sha(h.sha),
+                format_sha(h.sha, sha_length),
                 h.uid,
                 h.gid,
                 (stat.filemode(h.mode) if h.mode else '<deleted>'),
@@ -61,15 +61,10 @@ def _print_details(backup_name: str, search_results: List[QueryResponse]) -> Non
 
 
 def main(args: argparse.Namespace) -> None:
-    staticconf.DictConfiguration({'sha_length': args.sha_length})
     after_timestamp = parse_time(args.after) if args.after else 0
     before_timestamp = parse_time(args.before) if args.before else int(time.time())
 
-    staticconf.YamlConfiguration(args.config, flatten=False)
-    backup_set_config = staticconf.read('backups')[args.name]
-    staticconf.DictConfiguration(backup_set_config, namespace=args.name)
     backup_store = get_backup_store(args.name)
-
     with backup_store.open_manifest():
         search_results = backup_store.manifest.search(
             after_timestamp=after_timestamp,
@@ -81,7 +76,7 @@ def main(args: argparse.Namespace) -> None:
     if not args.details:
         _print_summary(args.name, search_results)
     else:
-        _print_details(args.name, search_results)
+        _print_details(args.name, search_results, args.sha_length)
 
 
 @subparser('list', 'list the contents of a backup set', main)

@@ -20,6 +20,7 @@ from backuppy.util import format_time
 from backuppy.util import parse_time
 
 RESTORE_LIST_HEADERS = ['filename', 'sha', 'backup time']
+SHA_LENGTH = 8
 
 
 def _parse_destination(dest_input: Optional[str], backup_name: str) -> Tuple[str, str]:
@@ -46,7 +47,7 @@ def _confirm_restore(
     print(tabulate([
         [
             f.abs_file_name,
-            format_sha(f.sha),
+            format_sha(f.sha, SHA_LENGTH),
             format_time(f.commit_timestamp),
         ]
         for f in files_to_restore],

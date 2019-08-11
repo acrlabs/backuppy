@@ -23,15 +23,14 @@ def setup_logging_for_tests():
 @pytest.fixture(autouse=True)
 def test_config_file():
     config = {
-        'exclusions': ['dont_back_this_up'],
         'backups': {
             'backup1': {
                 'directories': ['/path/0'],
-                'exclusions': ['foo'],
+                'exclusions': ['dont_back_this_up', 'foo'],
             },
             'backup2': {
                 'directories': ['/path/1', '/path/2'],
-                'exclusions': ['bar']
+                'exclusions': ['dont_back_this_up', 'bar']
             },
         }
     }
