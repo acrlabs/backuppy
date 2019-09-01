@@ -65,7 +65,7 @@ def main(args: argparse.Namespace) -> None:
     before_timestamp = parse_time(args.before) if args.before else int(time.time())
 
     backup_store = get_backup_store(args.name)
-    with backup_store.open_manifest():
+    with backup_store.unlock():
         search_results = backup_store.manifest.search(
             after_timestamp=after_timestamp,
             before_timestamp=before_timestamp,

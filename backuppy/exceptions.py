@@ -2,6 +2,10 @@ class BackuppyException(Exception):
     pass
 
 
+class BackupCorruptedError(BackuppyException):
+    pass
+
+
 class BackupReadFailedException(BackuppyException):
     pass
 

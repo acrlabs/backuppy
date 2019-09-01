@@ -28,9 +28,9 @@ def assert_manifest_correct(before):
     rows = manifest_cursor.fetchall()
     assert len(rows) == (3 if before else 4)
     for row in rows:
-        start_pos = row[0].find(DATA_DIR)
-        filename = row[0][start_pos:]
-        assert row[1] in set([tfd.sha for tfd in test_file_history[filename]])
+        start_pos = row[1].find(DATA_DIR)
+        filename = row[1][start_pos:]
+        assert row[2] in set([tfd.sha for tfd in test_file_history[filename]])
 
 
 @pytest.fixture(autouse=True, scope='module')
@@ -94,4 +94,4 @@ def test_m2_crash_after_file_save():
     manifest_cursor.execute('select * from manifest where abs_file_name like "%another_file"')
     rows = manifest_cursor.fetchall()
     assert len(rows) == 1
-    assert rows[0][1] == test_file_history[os.path.join(DATA_DIR, 'another_file')][0].sha
+    assert rows[0][2] == test_file_history[os.path.join(DATA_DIR, 'another_file')][0].sha

@@ -60,7 +60,7 @@ def assert_backup_store_correct():
         else:
             assert len(rows) == len(history)
             for row, expected in zip(rows, history):
-                assert row[1] == expected.sha
+                assert row[2] == expected.sha
                 assert row[-2] == expected.mode
 
         if latest.backup_path:

@@ -48,7 +48,7 @@ def file_walker(path, on_error=None) -> Generator[str, None, None]:
         shuffle(dirs)
         shuffle(files)
         for f in files:
-            yield os.path.join(root, f)
+            yield path_join(root, f)
 
 
 def format_sha(sha: str, sha_length: int) -> Optional[str]:

@@ -21,13 +21,24 @@ def mock_manifest_entry_list():
         1000,
         1000,
         35677,
+        b'1111',
+        None,
     )]
 
 
 def test_parse_destination(fs):
-    assert _parse_destination('foo/bar', 'backup1') == ('/foo/bar/backup1', './foo/bar/backup1')
-    assert _parse_destination('/foo/bar', 'backup1') == ('/foo/bar/backup1', '/foo/bar/backup1')
-    assert _parse_destination(None, 'backup1') == ('/backup1', './backup1')
+    assert _parse_destination('foo/bar', 'fake_backup1') == (
+        '/foo/bar/fake_backup1',
+        './foo/bar/fake_backup1',
+    )
+    assert _parse_destination('/foo/bar', 'fake_backup1') == (
+        '/foo/bar/fake_backup1',
+        '/foo/bar/fake_backup1',
+    )
+    assert _parse_destination(None, 'fake_backup1') == (
+        '/fake_backup1',
+        './fake_backup1',
+    )
 
 
 @pytest.mark.parametrize('retval', [True, False])
@@ -44,8 +55,10 @@ def test_confirm_restore(retval, mock_manifest_entry_list, capsys):
 @pytest.mark.parametrize('base_sha', [None, 'ffffffff'])
 def test_restore(base_sha, mock_manifest_entry_list, fs):
     mock_manifest_entry_list[0].base_sha = base_sha
+    if base_sha:
+        mock_manifest_entry_list[0].base_key_pair = b'2222'
     with mock.patch('backuppy.cli.restore.IOIter') as mock_io_iter:
-        backup_store = mock.Mock(backup_name='backup1')
+        backup_store = mock.Mock(backup_name='fake_backup1')
         _restore(mock_manifest_entry_list, '/restore/here', backup_store)
         assert os.path.exists('/restore/here')
         assert mock_io_iter.call_args_list == [
@@ -54,8 +67,8 @@ def test_restore(base_sha, mock_manifest_entry_list, fs):
             mock.call('/restore/here/path/0/foo/bar'),
         ]
         if base_sha:
-            assert backup_store.load.call_args_list[0] == mock.call(base_sha, mock.ANY)
-        assert backup_store.load.call_args_list[-1] == mock.call('abcd1234', mock.ANY)
+            assert backup_store.load.call_args_list[0] == mock.call(base_sha, mock.ANY, b'2222')
+        assert backup_store.load.call_args_list[-1] == mock.call('abcd1234', mock.ANY, b'1111')
 
 
 @pytest.mark.parametrize('sha,entries', [
@@ -73,7 +86,7 @@ def test_main(retval, sha, entries):
     )
     with mock.patch(
             'backuppy.cli.restore._parse_destination',
-            return_value=('/restore/path/backup1', '/restore/path/backup1'),
+            return_value=('/restore/path/fake_backup1', '/restore/path/fake_backup1'),
         ), mock.patch('backuppy.cli.restore._confirm_restore', return_value=retval), \
             mock.patch('backuppy.cli.restore._restore') as mock_restore, \
             mock.patch('backuppy.cli.restore.parse_time'), \
@@ -85,13 +98,13 @@ def test_main(retval, sha, entries):
             config='backuppy.conf',
             dest='/restore/path',
             like='',
-            name='backup1',
+            name='fake_backup1',
             sha=sha,
         ))
         assert mock_restore.call_count == int(retval)
         if entries and retval:
             assert mock_restore.call_args_list == [mock.call(
                 entries,
-                '/restore/path/backup1',
+                '/restore/path/fake_backup1',
                 backup_store,
             )]

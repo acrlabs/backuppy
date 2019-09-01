@@ -27,21 +27,26 @@ def mock_manifest():
     m = Manifest(':memory:')
     m._cursor.execute(
         '''
-        insert into manifest (abs_file_name, sha, uid, gid, mode, commit_timestamp)
+        insert into manifest (abs_file_name, sha, uid, gid, mode, key_pair, commit_timestamp)
         values
-        ('/foo', '12345678', 1000, 2000, 34622, 50),
-        ('/foo', '12345679', 1000, 2000, 34622, 100),
-        ('/bar', 'abcdef78', 1000, 2000, 34622, 55),
-        ('/bar', '123def78', 1000, 2000, 34622, 200),
-        ('/baz', 'fdecba21', 1000, 2000, 34622, 50),
-        ('/baz', null, null, null, null, 100)
+        ('/foo', '12345678', 1000, 2000, 34622, '1234', 50),
+        ('/foo', '12345679', 1000, 2000, 34622, '1234', 100),
+        ('/bar', 'abcdef78', 1000, 2000, 34622, '1234', 55),
+        ('/bar', '123def78', 1000, 2000, 34622, '1234', 200),
+        ('/baz', 'fdecba21', 1000, 2000, 34622, '1234', 50),
+        ('/baz', null, null, null, null, null, 100)
         '''
     )
-    m._cursor.execute('insert into diff_pairs (sha, base_sha) values ("123def78", "abcdef78")')
+    m._cursor.execute(
+        '''
+        insert into base_shas (sha, base_sha, base_key_pair)
+        values ('123def78', 'abcdef78', 'abcd')
+        '''
+    )
     return m
 
 
-@pytest.mark.parametrize('existing_tables', [[], [{'name': 'manifest'}, {'name': 'diff_pairs'}]])
+@pytest.mark.parametrize('existing_tables', [[], [{'name': 'manifest'}, {'name': 'base_shas'}]])
 def test_create_manifest_object(existing_tables):
     with mock.patch('backuppy.manifest.sqlite3') as mock_sqlite, \
             mock.patch('backuppy.manifest.Manifest._create_manifest_tables') as mock_create_tables:
@@ -128,15 +133,15 @@ def test_search_history_limit(mock_manifest, limit):
         assert len(history) == 1
 
 
-@pytest.mark.parametrize('base_sha', [None, 'f33b'])
-def test_insert_new_file(mock_manifest, mock_stat, base_sha):
+@pytest.mark.parametrize('base_sha,base_key_pair', [(None, None), ('f33b', b'2222')])
+def test_insert_new_file(mock_manifest, mock_stat, base_sha, base_key_pair):
     new_file = '/not/backed/up'
     uid, gid, mode = mock_stat.st_uid, mock_stat.st_gid, mock_stat.st_mode
-    new_entry = ManifestEntry(new_file, 'b33f', base_sha, uid, gid, mode)
+    new_entry = ManifestEntry(new_file, 'b33f', base_sha, uid, gid, mode, b'1111', base_key_pair)
     mock_manifest.insert_or_update(new_entry)
     mock_manifest._cursor.execute(
         '''
-        select * from manifest left natural join diff_pairs
+        select * from manifest left natural join base_shas
         where abs_file_name = '/not/backed/up'
         '''
     )
@@ -148,18 +153,20 @@ def test_insert_new_file(mock_manifest, mock_stat, base_sha):
     assert rows[0]['uid'] == 1000
     assert rows[0]['gid'] == 2000
     assert rows[0]['mode'] == 34622
+    assert rows[0]['key_pair'] == b'1111'
+    assert rows[0]['base_key_pair'] == base_key_pair
     assert rows[0]['commit_timestamp'] == 1000
 
 
-@pytest.mark.parametrize('base_sha', [None, 'f33b2'])
-def test_update(mock_manifest, mock_stat, base_sha):
+@pytest.mark.parametrize('base_sha,base_key_pair', [(None, None), ('f33b', b'2222')])
+def test_update(mock_manifest, mock_stat, base_sha, base_key_pair):
     new_file = '/foo'
     uid, gid, mode = mock_stat.st_uid, mock_stat.st_gid, mock_stat.st_mode
-    new_entry = ManifestEntry(new_file, 'b33f2', base_sha, uid, gid, mode)
+    new_entry = ManifestEntry(new_file, 'b33f2', base_sha, uid, gid, mode, b'1111', base_key_pair)
     mock_manifest.insert_or_update(new_entry)
     mock_manifest._cursor.execute(
         '''
-        select * from manifest left natural join diff_pairs
+        select * from manifest left natural join base_shas
         where abs_file_name = '/foo'
         '''
     )
@@ -171,6 +178,8 @@ def test_update(mock_manifest, mock_stat, base_sha):
     assert rows[-1]['uid'] == 1000
     assert rows[-1]['gid'] == 2000
     assert rows[-1]['mode'] == 34622
+    assert rows[-1]['key_pair'] == b'1111'
+    assert rows[-1]['base_key_pair'] == base_key_pair
     assert rows[-1]['commit_timestamp'] == 1000
 
 
@@ -179,7 +188,7 @@ def test_delete(mock_manifest):
     mock_manifest.delete(deleted_file)
     mock_manifest._cursor.execute(
         '''
-        select * from manifest left natural join diff_pairs
+        select * from manifest left natural join base_shas
         where abs_file_name = '/foo'
         '''
     )
@@ -191,6 +200,8 @@ def test_delete(mock_manifest):
     assert not rows[-1]['uid']
     assert not rows[-1]['gid']
     assert not rows[-1]['mode']
+    assert not rows[-1]['key_pair']
+    assert not rows[-1]['base_key_pair']
     assert rows[-1]['commit_timestamp'] == 1000
 
 
@@ -199,7 +210,7 @@ def test_delete_unknown(mock_manifest, caplog):
         mock_manifest.delete('/not/backed/up')
         mock_manifest._cursor.execute(
             '''
-            select * from manifest left natural join diff_pairs
+            select * from manifest left natural join base_shas
             where abs_file_name = '/not/backed/up'
             '''
         )

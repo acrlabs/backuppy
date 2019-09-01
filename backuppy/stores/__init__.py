@@ -1,6 +1,7 @@
 import staticconf
 
 from backuppy.exceptions import UnknownProtocolError
+from backuppy.stores.backup_store import BackupStore
 from backuppy.stores.local_backup_store import LocalBackupStore
 
 
@@ -9,7 +10,7 @@ __all__ = [
 ]
 
 
-def get_backup_store(backup_name):  # pragma: no cover
+def get_backup_store(backup_name) -> BackupStore:  # pragma: no cover
     protocol = staticconf.read_string('protocol.type', namespace=backup_name)
     if protocol == 'local':
         return LocalBackupStore(backup_name)

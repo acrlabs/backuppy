@@ -18,6 +18,7 @@ from backuppy.util import ask_for_confirmation
 from backuppy.util import format_sha
 from backuppy.util import format_time
 from backuppy.util import parse_time
+from backuppy.util import path_join
 
 RESTORE_LIST_HEADERS = ['filename', 'sha', 'backup time']
 SHA_LENGTH = 8
@@ -25,7 +26,8 @@ SHA_LENGTH = 8
 
 def _parse_destination(dest_input: Optional[str], backup_name: str) -> Tuple[str, str]:
     dest_input = dest_input or '.'
-    destination_str = os.path.join(os.path.normpath(dest_input), backup_name)
+    # don't use path_join here because it wipes out the './' prefix
+    destination_str = os.path.join(dest_input, backup_name)
     destination = os.path.abspath(destination_str)
     if dest_input != '.' and not os.path.isabs(destination_str):
         destination_str = os.path.join('.', destination_str)
@@ -57,22 +59,27 @@ def _confirm_restore(
     return ask_for_confirmation('Continue?')
 
 
-def _restore(files_to_restore: List[ManifestEntry], destination: str, backup_store: BackupStore):
+def _restore(
+    files_to_restore: List[ManifestEntry],
+    destination: str,
+    backup_store: BackupStore,
+) -> None:
     print('Beginning restore...')
     os.makedirs(destination, exist_ok=True)
     for f in files_to_restore:
-        restore_file_name = os.path.join(destination, f.abs_file_name[1:])
+        restore_file_name = path_join(destination, f.abs_file_name[1:])
 
         with IOIter() as orig_file, \
                 IOIter() as diff_file, \
                 IOIter(restore_file_name) as restore_file:
 
             if f.base_sha:
-                backup_store.load(f.base_sha, orig_file)
-                backup_store.load(f.sha, diff_file)
+                assert f.base_key_pair  # make mypy happy; this cannot be None here
+                backup_store.load(f.base_sha, orig_file, f.base_key_pair)
+                backup_store.load(f.sha, diff_file, f.key_pair)
                 apply_diff(orig_file, diff_file, restore_file)
             else:
-                backup_store.load(f.sha, restore_file)
+                backup_store.load(f.sha, restore_file, f.key_pair)
     print('Restore complete!\n')
 
 
@@ -85,7 +92,7 @@ def main(args: argparse.Namespace) -> None:
     staticconf.DictConfiguration(backup_set_config, namespace=args.name)
     backup_store = get_backup_store(args.name)
 
-    with backup_store.open_manifest():
+    with backup_store.unlock():
         files_to_restore: List[ManifestEntry]
         if args.sha:
             files_to_restore = backup_store.manifest.get_entries_by_sha(args.sha)

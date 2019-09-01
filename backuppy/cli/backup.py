@@ -55,13 +55,13 @@ def _scan_directory(
     return marked_files
 
 
-def main(args: argparse.Namespace):
+def main(args: argparse.Namespace) -> None:
     """ entry point for the 'backup' subcommand """
     for backup_name, backup_config in staticconf.read('backups').items():
         logger.info(f'Starting backup for {backup_name}')
         backup_store = get_backup_store(backup_name)
 
-        with backup_store.open_manifest():
+        with backup_store.unlock():
             marked_files: Set[str] = set()
             for base_path in staticconf.read_list('directories', namespace=backup_name):
                 abs_base_path = os.path.abspath(base_path)

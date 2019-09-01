@@ -1,5 +1,7 @@
+import os
 import sqlite3
 import time
+from typing import Callable
 from typing import List
 from typing import Optional
 from typing import Set
@@ -7,7 +9,22 @@ from typing import Tuple
 
 import colorlog
 
+from backuppy.crypto import compress_and_encrypt
+from backuppy.crypto import decrypt_and_unpack
+from backuppy.crypto import decrypt_and_verify
+from backuppy.crypto import encrypt_and_sign
+from backuppy.crypto import generate_key_pair
+from backuppy.exceptions import BackupCorruptedError
+from backuppy.io import IOIter
+from backuppy.options import OptionsDict
+from backuppy.util import get_scratch_dir
+
 logger = colorlog.getLogger(__name__)
+MANIFEST_PREFIX = 'manifest'
+MANIFEST_KEY_SUFFIX = '.key'
+MANIFEST_FILE = MANIFEST_PREFIX + '.{ts}'
+MANIFEST_KEY_FILE = MANIFEST_FILE + MANIFEST_KEY_SUFFIX
+_MANIFEST_TABLES = {'manifest', 'base_shas'}
 QueryResponse = Tuple[str, List['ManifestEntry']]
 
 
@@ -20,7 +37,9 @@ class ManifestEntry:
         uid: int,
         gid: int,
         mode: int,
-        commit_timestamp: int = None,
+        key_pair: bytes,
+        base_key_pair: Optional[bytes],
+        commit_timestamp: int = 0,  # provide a dummy value to be filled in at commit time
     ) -> None:
         self.abs_file_name = abs_file_name
         self.sha = sha
@@ -28,11 +47,12 @@ class ManifestEntry:
         self.uid = uid
         self.gid = gid
         self.mode = mode
+        self.key_pair = key_pair
+        self.base_key_pair = base_key_pair
+        self.commit_timestamp = commit_timestamp
 
-        # This is sortof a hack, but if something doesn't have a commit timestamp
-        # and it tries to access this field we want it to crash
-        if commit_timestamp:
-            self.commit_timestamp = commit_timestamp
+        # if a base sha is provided, a key_pair MUST also exist for that sha
+        assert bool(base_sha) == bool(base_key_pair)
 
     @classmethod
     def from_row(cls, row: sqlite3.Row) -> 'ManifestEntry':
@@ -44,6 +64,8 @@ class ManifestEntry:
             row['uid'],
             row['gid'],
             row['mode'],
+            row['key_pair'],
+            row['base_key_pair'],
             row['commit_timestamp'],
         )
 
@@ -56,8 +78,8 @@ class Manifest:
 
     def __init__(self, manifest_filename: str):
         """ Connect to a manifest file and optionally initialize a new database """
-        self._conn = sqlite3.connect(manifest_filename)
-        self._conn.set_trace_callback(logger.debug2)
+        self.filename = manifest_filename
+        self._conn = sqlite3.connect(self.filename)
         self._conn.row_factory = sqlite3.Row
         self._cursor = self._conn.cursor()
         self.changed = False
@@ -69,7 +91,10 @@ class Manifest:
             '''
         )
         rows = self._cursor.fetchall()
-        if {r['name'] for r in rows} != {'manifest', 'diff_pairs'}:
+        tables = {r['name'] for r in rows}
+        if not (tables <= _MANIFEST_TABLES):
+            raise BackupCorruptedError(f'The manifest file does not have the right tables: {tables}')
+        if tables != _MANIFEST_TABLES:
             logger.info('This looks like a new manifest; initializing')
             self._create_manifest_tables()
 
@@ -89,7 +114,7 @@ class Manifest:
         timestamp = timestamp or int(time.time())
         self._cursor.execute(
             '''
-            select * from manifest natural left join diff_pairs
+            select * from manifest natural left join base_shas
             where abs_file_name=? and commit_timestamp<=? order by commit_timestamp
             ''',
             (abs_file_name, timestamp),
@@ -103,7 +128,7 @@ class Manifest:
 
     def get_entries_by_sha(self, sha: str) -> List[ManifestEntry]:
         self._cursor.execute(
-            "select * from manifest natural left join diff_pairs where sha like ?",
+            'select * from manifest natural left join base_shas where sha like ?',
             (f'{sha}%',),
         )
         rows = self._cursor.fetchall()
@@ -126,7 +151,7 @@ class Manifest:
         after_timestamp = after_timestamp or 0
         self._cursor.execute(
             '''
-            select * from manifest natural left join diff_pairs
+            select * from manifest natural left join base_shas
             where abs_file_name like ? and commit_timestamp between ? and ?
             order by abs_file_name, commit_timestamp desc
             ''',
@@ -162,8 +187,8 @@ class Manifest:
         self._cursor.execute(
             '''
             insert into manifest
-            (abs_file_name, sha, uid, gid, mode, commit_timestamp)
-            values (?, ?, ?, ?, ?, ?)
+            (abs_file_name, sha, uid, gid, mode, key_pair, commit_timestamp)
+            values (?, ?, ?, ?, ?, ?, ?)
             ''',
             (
                 entry.abs_file_name,
@@ -171,13 +196,14 @@ class Manifest:
                 entry.uid,
                 entry.gid,
                 entry.mode,
+                entry.key_pair,
                 commit_timestamp,
             ),
         )
         if entry.base_sha:
             self._cursor.execute(
-                'insert or ignore into diff_pairs (sha, base_sha) values (?, ?)',
-                (entry.sha, entry.base_sha),
+                'insert or ignore into base_shas (sha, base_sha, base_key_pair) values (?, ?, ?)',
+                (entry.sha, entry.base_sha, entry.base_key_pair),
             )
         self._commit()
 
@@ -234,19 +260,68 @@ class Manifest:
                 uid integer,
                 gid integer,
                 mode integer,
+                key_pair blob,
                 commit_timestamp integer not null
             )
             '''
         )
         self._cursor.execute(
             '''
-            create table diff_pairs (
+            create table base_shas (
                 sha text not null unique,
                 base_sha text not null,
+                base_key_pair blob not null unique,
                 foreign key(sha) references manifest(sha)
             )
             '''
         )
-        self._cursor.execute(
-            'create index manifest_idx on manifest(abs_file_name, commit_timestamp)')
+        self._cursor.execute('create index mfst_idx on manifest(abs_file_name, commit_timestamp)')
+        self._cursor.execute('create index sha_idx on manifest(sha)')
+
         self._commit()
+
+
+def unlock_manifest(
+    manifest_filename: str,
+    private_key_filename: str,
+    load: Callable[[str, IOIter], IOIter],
+    options: OptionsDict,
+) -> Manifest:
+    local_manifest_filename = os.path.join(get_scratch_dir(), manifest_filename)
+    logger.debug(f'Unlocking manifest at {local_manifest_filename}')
+
+    key_pair = b''
+    if options['use_encryption']:
+        with IOIter() as manifest_key:
+            load(manifest_filename + MANIFEST_KEY_SUFFIX, manifest_key)
+            encrypted_key_pair = manifest_key.fd.read()
+        key_pair = decrypt_and_verify(encrypted_key_pair, private_key_filename)
+
+    with IOIter() as encrypted_local_manifest, \
+            IOIter(local_manifest_filename, check_mtime=False) as local_manifest:
+        load(manifest_filename, encrypted_local_manifest)
+        decrypt_and_unpack(encrypted_local_manifest, local_manifest, key_pair, **options)
+
+    return Manifest(local_manifest_filename)
+
+
+def lock_manifest(
+    manifest: Manifest,
+    private_key_filename: str,
+    save: Callable[[IOIter, str], None],
+    options: OptionsDict,
+) -> None:
+
+    timestamp = time.time()
+    local_manifest_filename = manifest.filename
+
+    key_pair = b''
+    if options['use_encryption']:
+        key_pair = generate_key_pair()
+        with IOIter() as new_manifest_key:
+            new_manifest_key.fd.write(encrypt_and_sign(key_pair, private_key_filename))
+            save(new_manifest_key, MANIFEST_KEY_FILE.format(ts=timestamp))
+
+    with IOIter(local_manifest_filename) as local_manifest, IOIter() as encrypted_manifest:
+        compress_and_encrypt(local_manifest, encrypted_manifest, key_pair, **options)
+        save(encrypted_manifest, MANIFEST_FILE.format(ts=timestamp))

@@ -24,23 +24,27 @@ def setup_logging_for_tests():
 def test_config_file():
     config = {
         'backups': {
-            'backup1': {
+            'fake_backup1': {
                 'directories': ['/path/0'],
                 'exclusions': ['dont_back_this_up', 'foo'],
+                'options': [],
+                'private_key_filename': '/my/private/key',
             },
-            'backup2': {
+            'fake_backup2': {
                 'directories': ['/path/1', '/path/2'],
-                'exclusions': ['dont_back_this_up', 'bar']
+                'exclusions': ['dont_back_this_up', 'bar'],
+                'options': [],
+                'private_key_filename': '/my/private/key',
             },
-        }
+        },
     }
     with staticconf.testing.PatchConfiguration(config, flatten=False), \
             staticconf.testing.PatchConfiguration(
-                config['backups']['backup1'],
-                namespace='backup1'), \
+                config['backups']['fake_backup1'],
+                namespace='fake_backup1'), \
             staticconf.testing.PatchConfiguration(
-                config['backups']['backup2'],
-                namespace='backup2'):
+                config['backups']['fake_backup2'],
+                namespace='fake_backup2'):
         yield
 
 

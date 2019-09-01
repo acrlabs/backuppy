@@ -1,19 +1,26 @@
 import gzip
+import os
 from typing import Callable
-from typing import Optional
-from typing import Tuple
 
 import colorlog
+from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric import padding
+from cryptography.hazmat.primitives.asymmetric.rsa import RSAPrivateKey
 from cryptography.hazmat.primitives.ciphers import Cipher
 from cryptography.hazmat.primitives.ciphers.algorithms import AES
-from cryptography.hazmat.primitives.ciphers.modes import OFB
+from cryptography.hazmat.primitives.ciphers.modes import CTR
+from cryptography.hazmat.primitives.hashes import SHA256
 
+from backuppy.exceptions import BackupCorruptedError
 from backuppy.io import IOIter
 
 logger = colorlog.getLogger(__name__)
 GZIP_START = b'\x1f\x8b'
-KeyPair = Tuple[bytes, bytes]
+AES_KEY_SIZE = 32    # 256 bits
+AES_BLOCK_SIZE = 16  # 128 bits
+RSA_KEY_SIZE = 512   # 4096 bits
 
 
 def identity(x: bytes, y: int = 0) -> bytes:
@@ -24,8 +31,10 @@ def identity(x: bytes, y: int = 0) -> bytes:
 def compress_and_encrypt(
     input_file: IOIter,
     output_file: IOIter,
-    key: Optional[KeyPair],
+    key_pair: bytes,
+    *,
     use_compression: bool,
+    use_encryption: bool,
 ) -> None:
     """ Read data from an open file descriptor, and write the compressed, encrypted data to another
     file descriptor
@@ -33,10 +42,11 @@ def compress_and_encrypt(
     :param input_file: an IOIter object to read plaintext data from
     :param output_file: an IOIter object to write compressed ciphertext to
     """
+    key, nonce = key_pair[:AES_KEY_SIZE], key_pair[AES_KEY_SIZE:]
     zip_fn: Callable[[bytes], bytes] = gzip.compress if use_compression else identity
     encrypt_fn: Callable[[bytes], bytes] = (
-        Cipher(AES(key[0]), OFB(key[1]), backend=default_backend()).encryptor().update
-        if key else identity
+        Cipher(AES(key), CTR(nonce), backend=default_backend()).encryptor().update
+        if use_encryption else identity
     )
     writer = output_file.writer(); next(writer)
     logger.debug2('starting to compress')
@@ -51,8 +61,10 @@ def compress_and_encrypt(
 def decrypt_and_unpack(
     input_file: IOIter,
     output_file: IOIter,
-    key: Optional[KeyPair],
+    key_pair: bytes,
+    *,
     use_compression: bool,
+    use_encryption: bool,
 ) -> None:
     """ Read encrypted, GZIPed data from an open file descriptor, and write the decoded data to
     another file descriptor
@@ -60,10 +72,11 @@ def decrypt_and_unpack(
     :param input_file: an IOIter object to read compressed ciphertext from
     :param output_file: an IOIter object to write plaintext data to
     """
+    key, nonce = key_pair[:AES_KEY_SIZE], key_pair[AES_KEY_SIZE:]
     decrypted_data = b''
     decrypt_fn: Callable[[bytes], bytes] = (
-        Cipher(AES(key[0]), OFB(key[1]), backend=default_backend()).decryptor().update
-        if key else identity
+        Cipher(AES(key), CTR(nonce), backend=default_backend()).decryptor().update
+        if use_encryption else identity
     )
     writer = output_file.writer(); next(writer)
     for block in input_file.reader():
@@ -90,3 +103,51 @@ def decrypt_and_unpack(
         block = gzip.decompress(decrypted_data) if use_compression else decrypted_data
         logger.debug2(f'unzip_fn returned {len(block)} bytes')
         writer.send(block)
+
+
+def generate_key_pair() -> bytes:
+    return os.urandom(AES_KEY_SIZE + AES_BLOCK_SIZE)
+
+
+def encrypt_and_sign(data: bytes, private_key_filename: str) -> bytes:
+    private_key = _get_key(private_key_filename)
+    encrypted_key_pair = private_key.public_key().encrypt(
+        data,
+        padding.OAEP(padding.MGF1(SHA256()), SHA256(), label=None),
+    )
+    signature = private_key.sign(
+        data,
+        padding.PSS(padding.MGF1(SHA256()), padding.PSS.MAX_LENGTH),
+        SHA256(),
+    )
+    return encrypted_key_pair + signature
+
+
+def decrypt_and_verify(data: bytes, private_key_filename: str) -> bytes:
+    private_key = _get_key(private_key_filename)
+    message, signature = data[:RSA_KEY_SIZE], data[RSA_KEY_SIZE:]
+    key_pair = private_key.decrypt(
+        message,
+        padding.OAEP(padding.MGF1(SHA256()), SHA256(), label=None),
+    )
+    try:
+        private_key.public_key().verify(
+            signature,
+            key_pair,
+            padding.PSS(padding.MGF1(SHA256()), padding.PSS.MAX_LENGTH),
+            SHA256(),
+        )
+    except InvalidSignature as e:
+        raise BackupCorruptedError('Could not decrypt archive') from e
+
+    return message
+
+
+def _get_key(private_key_filename: str) -> RSAPrivateKey:
+    with open(private_key_filename) as priv_kf:
+        private_key = serialization.load_pem_private_key(priv_kf.read(), None, default_backend())
+
+    if private_key.key_size != RSA_KEY_SIZE:
+        raise ValueError(f'Backuppy requires a {RSA_KEY_SIZE} private key')
+
+    return private_key

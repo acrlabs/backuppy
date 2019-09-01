@@ -2,6 +2,7 @@ boto3
 colorlog
 cryptography
 dateparser
+mypy-extensions
 edlib>=1.2.3.post1
 PyYAML
 PyStaticConfiguration

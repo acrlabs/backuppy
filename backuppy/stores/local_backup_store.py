@@ -1,4 +1,6 @@
 import os
+import shutil
+from typing import List
 
 import colorlog
 
@@ -18,15 +20,17 @@ class LocalBackupStore(BackupStore):
         super().__init__(backup_name)
         self.backup_location = os.path.abspath(self.config.read_string('protocol.location'))
 
-    def _save(self, src: str, dest: str, overwrite: bool = False) -> None:
+    def _save(self, src: IOIter, dest: str) -> None:
+        assert src.filename  # can't have a tmpfile here
         abs_backup_path = path_join(self.backup_location, dest)
         os.makedirs(os.path.dirname(abs_backup_path), exist_ok=True)
-        if os.path.exists(abs_backup_path) and not overwrite:
-            logger.warning(f'{abs_backup_path} already exists in the store; skipping')
-            return
+        if os.path.exists(abs_backup_path):
+            logger.warning(
+                f'{abs_backup_path} already exists in the store; overwriting with new data',
+            )
 
         logger.info(f'Writing {src} to {abs_backup_path}')  # test_f2_lbs_atomicity_1
-        os.rename(src, abs_backup_path)
+        shutil.move(src.filename, abs_backup_path)
         return  # test_f2_lbs_atomicity_2
 
     def _load(self, path: str, output_file: IOIter) -> IOIter:
@@ -35,3 +39,15 @@ class LocalBackupStore(BackupStore):
         with IOIter(abs_backup_path) as input_file:
             io_copy(input_file, output_file)
         return output_file
+
+    def _query(self, prefix: str) -> List[str]:
+        results: List[str] = []
+        for root, dirs, files in os.walk(self.backup_location):
+            for f in files:
+                full_path = path_join(root, f)
+                if full_path.startswith(prefix):
+                    results += full_path
+        return results
+
+    def _delete(self, filename: str) -> None:
+        os.remove(path_join(self.backup_location, filename))

@@ -16,35 +16,35 @@ from backuppy.util import format_time
 def mock_search_results():
     return [
         ('/path/1/file1', [
-            ManifestEntry('/path/1/file1', 'ab1defabcdefabcdef', None, 1000, 1000, 12345, 100),
-            ManifestEntry('/path/1/file1', 'ab2defabcdefabcde1', None, 1000, 1000, 12345, 75),
-            ManifestEntry('/path/1/file1', 'ab3defabcdefabcde2', None, 1000, 1000, 12345, 20),
+            ManifestEntry('/path/1/file1', 'ab1dedef', None, 1000, 1000, 12345, b'1111', None, 100),
+            ManifestEntry('/path/1/file1', 'ab2dede1', None, 1000, 1000, 12345, b'2222', None, 75),
+            ManifestEntry('/path/1/file1', 'ab3dede2', None, 1000, 1000, 12345, b'3333', None, 20),
         ]),
         ('/path/2/file2', [
-            ManifestEntry('/path/2/file2', '1b1defabcdefabcdef', None, 1000, 1000, 12345, 105),
-            ManifestEntry('/path/2/file2', '1b2defabcdefabcde1', None, 1000, 1000, 12345, 65),
+            ManifestEntry('/path/2/file2', '1b1dedef', None, 1000, 1000, 12345, b'4444', None, 105),
+            ManifestEntry('/path/2/file2', '1b2dede1', None, 1000, 1000, 12345, b'5555', None, 65),
         ]),
     ]
 
 
 def test_split_root_prefix():
-    assert _split_root_prefix('/path/1/the_file', 'backup2') == ('/path/1/', 'the_file')
+    assert _split_root_prefix('/path/1/the_file', 'fake_backup2') == ('/path/1/', 'the_file')
 
 
 def test_split_root_prefix_not_present():
     with pytest.raises(ValueError):
-        _split_root_prefix('/path/0/the_file', 'backup2')
+        _split_root_prefix('/path/0/the_file', 'fake_backup2')
 
 
 def test_print_summary(mock_search_results, capsys):
-    _print_summary('backup2', mock_search_results)
+    _print_summary('fake_backup2', mock_search_results)
     out, err = capsys.readouterr()
     assert re.search('file1.*3.*' + format_time(100), out)
     assert re.search('file2.*2.*' + format_time(105), out)
 
 
 def test_print_details(mock_search_results, capsys):
-    _print_details('backup2', mock_search_results, 5)
+    _print_details('fake_backup2', mock_search_results, 5)
     out, err = capsys.readouterr()
     assert re.search(r'ab1de\.\.\..*' + format_time(100), out)
     assert re.search(r'ab2de\.\.\..*' + format_time(75), out)
@@ -66,7 +66,7 @@ def test_main(after, before, details):
         file_limit=None,
         history_limit=None,
         like=None,
-        name='backup1',
+        name='fake_backup1',
         sha_length=17,
     )
     with mock.patch('backuppy.cli.list.get_backup_store') as mock_get_store, \
