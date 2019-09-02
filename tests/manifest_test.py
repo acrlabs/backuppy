@@ -1,8 +1,11 @@
 import mock
 import pytest
 
+from backuppy.exceptions import BackupCorruptedError
+from backuppy.manifest import lock_manifest
 from backuppy.manifest import Manifest
 from backuppy.manifest import ManifestEntry
+from backuppy.manifest import unlock_manifest
 
 INITIAL_FILES = ['/file1', '/file2', '/file3']
 
@@ -53,6 +56,19 @@ def test_create_manifest_object(existing_tables):
         mock_sqlite.connect.return_value.cursor.return_value.fetchall.return_value = existing_tables
         Manifest('my_manifest.sqlite')
         assert mock_create_tables.call_count == 1 - bool(len(existing_tables))
+
+
+@pytest.mark.parametrize('existing_tables', [
+    [{'name': 'manifest'}],
+    [{'name': 'manifest'}, {'name': 'foo'}],
+])
+def test_corrupted_manifest(existing_tables):
+    with mock.patch('backuppy.manifest.sqlite3') as mock_sqlite, \
+            mock.patch('backuppy.manifest.Manifest._create_manifest_tables') as mock_create_tables:
+        mock_sqlite.connect.return_value.cursor.return_value.fetchall.return_value = existing_tables
+        with pytest.raises(BackupCorruptedError):
+            Manifest('my_manifest.sqlite')
+        assert mock_create_tables.call_count == 0
 
 
 def test_get_entry_no_entry(mock_manifest):
@@ -225,3 +241,35 @@ def test_tracked_files(mock_manifest, timestamp):
     if timestamp < 100:
         expected.add('/baz')
     assert mock_manifest.files(timestamp) == expected
+
+
+@pytest.mark.parametrize('use_encryption', [True, False])
+def test_unlock_manifest(use_encryption):
+    mock_load = mock.Mock()
+    with mock.patch('backuppy.manifest.IOIter'), \
+            mock.patch('backuppy.manifest.decrypt_and_verify') as mock_decrypt_pub_key, \
+            mock.patch('backuppy.manifest.decrypt_and_unpack'):
+        unlock_manifest(
+            'my_manifest.sqlite',
+            '/path/to/private/key',
+            mock_load,
+            options={'use_encryption': use_encryption},
+        )
+    assert mock_load.call_count == 1 + use_encryption
+    assert mock_decrypt_pub_key.call_count == use_encryption
+
+
+@pytest.mark.parametrize('use_encryption', [True, False])
+def test_lock_manifest(mock_manifest, use_encryption):
+    mock_save = mock.Mock()
+    with mock.patch('backuppy.manifest.IOIter'), \
+            mock.patch('backuppy.manifest.encrypt_and_sign') as mock_decrypt_pub_key, \
+            mock.patch('backuppy.manifest.compress_and_encrypt'):
+        lock_manifest(
+            mock_manifest,
+            '/path/to/private/key',
+            mock_save,
+            options={'use_encryption': use_encryption},
+        )
+    assert mock_save.call_count == 1 + use_encryption
+    assert mock_decrypt_pub_key.call_count == use_encryption

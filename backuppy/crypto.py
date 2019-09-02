@@ -15,6 +15,7 @@ from cryptography.hazmat.primitives.hashes import SHA256
 
 from backuppy.exceptions import BackupCorruptedError
 from backuppy.io import IOIter
+from backuppy.options import OptionsDict
 
 logger = colorlog.getLogger(__name__)
 GZIP_START = b'\x1f\x8b'
@@ -32,9 +33,7 @@ def compress_and_encrypt(
     input_file: IOIter,
     output_file: IOIter,
     key_pair: bytes,
-    *,
-    use_compression: bool,
-    use_encryption: bool,
+    options: OptionsDict,
 ) -> None:
     """ Read data from an open file descriptor, and write the compressed, encrypted data to another
     file descriptor
@@ -43,10 +42,10 @@ def compress_and_encrypt(
     :param output_file: an IOIter object to write compressed ciphertext to
     """
     key, nonce = key_pair[:AES_KEY_SIZE], key_pair[AES_KEY_SIZE:]
-    zip_fn: Callable[[bytes], bytes] = gzip.compress if use_compression else identity
+    zip_fn: Callable[[bytes], bytes] = gzip.compress if options['use_compression'] else identity
     encrypt_fn: Callable[[bytes], bytes] = (
         Cipher(AES(key), CTR(nonce), backend=default_backend()).encryptor().update
-        if use_encryption else identity
+        if options['use_encryption'] else identity
     )
     writer = output_file.writer(); next(writer)
     logger.debug2('starting to compress')
@@ -62,9 +61,7 @@ def decrypt_and_unpack(
     input_file: IOIter,
     output_file: IOIter,
     key_pair: bytes,
-    *,
-    use_compression: bool,
-    use_encryption: bool,
+    options: OptionsDict,
 ) -> None:
     """ Read encrypted, GZIPed data from an open file descriptor, and write the decoded data to
     another file descriptor
@@ -76,7 +73,7 @@ def decrypt_and_unpack(
     decrypted_data = b''
     decrypt_fn: Callable[[bytes], bytes] = (
         Cipher(AES(key), CTR(nonce), backend=default_backend()).decryptor().update
-        if use_encryption else identity
+        if options['use_encryption'] else identity
     )
     writer = output_file.writer(); next(writer)
     for block in input_file.reader():
@@ -86,7 +83,7 @@ def decrypt_and_unpack(
         # gzip.decompress throws an EOFError if we pass in partial data, so here we need to
         # decompress each GZIP'ed member individually; to find a complete member we look for
         # the start of the next GZIP blob, which starts with a known constant byte-pair
-        if use_compression:
+        if options['use_compression']:
             index = decrypted_data.find(GZIP_START, 2)
             if index != -1:
                 block = gzip.decompress(decrypted_data[:index])
@@ -100,7 +97,7 @@ def decrypt_and_unpack(
 
     # Decompress and write out the last block
     if decrypted_data:
-        block = gzip.decompress(decrypted_data) if use_compression else decrypted_data
+        block = gzip.decompress(decrypted_data) if options['use_compression'] else decrypted_data
         logger.debug2(f'unzip_fn returned {len(block)} bytes')
         writer.send(block)
 
@@ -140,7 +137,7 @@ def decrypt_and_verify(data: bytes, private_key_filename: str) -> bytes:
     except InvalidSignature as e:
         raise BackupCorruptedError('Could not decrypt archive') from e
 
-    return message
+    return key_pair
 
 
 def _get_key(private_key_filename: str) -> RSAPrivateKey:

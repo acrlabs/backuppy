@@ -44,9 +44,8 @@ class LocalBackupStore(BackupStore):
         results: List[str] = []
         for root, dirs, files in os.walk(self.backup_location):
             for f in files:
-                full_path = path_join(root, f)
-                if full_path.startswith(prefix):
-                    results += full_path
+                if f.startswith(prefix):
+                    results += [path_join(root[len(self.backup_location):], f)]
         return results
 
     def _delete(self, filename: str) -> None:

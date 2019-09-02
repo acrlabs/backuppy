@@ -2,6 +2,7 @@ import os
 
 import mock
 import pytest
+import staticconf.testing
 
 from backuppy.exceptions import ManifestLockedException
 from backuppy.stores.backup_store import BackupStore
@@ -55,7 +56,7 @@ def test_unlock(fs, caplog, backup_store, manifest_changed, manifest_exists):
         mock_manifest.return_value.changed = manifest_changed
         mock_unlock_manifest.return_value = mock_manifest.return_value
         if manifest_exists:
-            backup_store._query.return_value = ['manifest.1234123', 'manifest.1234123.key']
+            backup_store._query.return_value = ['manifest.1234123']
         backup_store.rotate_manifests = mock.Mock()
         with backup_store.unlock():
             pass
@@ -137,3 +138,20 @@ def test_load(backup_store):
         assert mock_decrypt.call_count == 1
         assert mock_io_iter.call_args == mock.call()
         assert backup_store._load.call_args == mock.call('12/34/5678', dest)
+
+
+@pytest.mark.parametrize('max_manifest_versions', [None, 2])
+def test_rotate_manifests(backup_store, max_manifest_versions):
+    backup_store._query.return_value = ['manifest.1234', 'manifest.1235', 'manifest.1236']
+    with staticconf.testing.PatchConfiguration(
+        {'options': [{'max_manifest_versions': max_manifest_versions}]},
+        namespace='fake_backup1',
+    ):
+        backup_store.rotate_manifests()
+    if not max_manifest_versions:
+        assert backup_store._delete.call_count == 0
+    else:
+        assert backup_store._delete.call_args_list == [
+            mock.call('manifest.1234'),
+            mock.call('manifest-key.1234'),
+        ]

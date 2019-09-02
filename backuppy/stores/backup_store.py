@@ -22,7 +22,7 @@ from backuppy.io import IOIter
 from backuppy.manifest import lock_manifest
 from backuppy.manifest import Manifest
 from backuppy.manifest import MANIFEST_FILE
-from backuppy.manifest import MANIFEST_KEY_SUFFIX
+from backuppy.manifest import MANIFEST_KEY_FILE
 from backuppy.manifest import MANIFEST_PREFIX
 from backuppy.manifest import ManifestEntry
 from backuppy.manifest import unlock_manifest
@@ -68,7 +68,7 @@ class BackupStore(metaclass=ABCMeta):
         rmtree(get_scratch_dir())
         os.makedirs(get_scratch_dir(), exist_ok=True)
 
-        manifests = sorted(self._query(MANIFEST_PREFIX))
+        manifests = sorted(self._query(MANIFEST_PREFIX + '.'))
         if not manifests:
             logger.warning(
                 '''
@@ -202,7 +202,7 @@ class BackupStore(metaclass=ABCMeta):
         # We compress and encrypt the file on the local file system, and then pass the encrypted
         # file to the backup store to handle atomically
         with IOIter(path_join(get_scratch_dir(), dest)) as encrypted_save_file:
-            compress_and_encrypt(src, encrypted_save_file, key_pair, **self.options)
+            compress_and_encrypt(src, encrypted_save_file, key_pair, self.options)
             self._save(encrypted_save_file, dest)  # test_f1_crash_file_save
 
     def load(self, src: str, dest: IOIter, key_pair: bytes) -> IOIter:
@@ -211,20 +211,20 @@ class BackupStore(metaclass=ABCMeta):
 
         with IOIter() as encrypted_load_file:
             self._load(src, encrypted_load_file)
-            decrypt_and_unpack(encrypted_load_file, dest, key_pair, **self.options)
+            decrypt_and_unpack(encrypted_load_file, dest, key_pair, self.options)
         dest.fd.seek(0)
         return dest
 
     def rotate_manifests(self) -> None:
-        try:
-            max_versions = self.config.read_int('max_manifest_versions')
-        except staticconf.error.ConfigurationError:
+        max_versions = self.options['max_manifest_versions']
+        if not max_versions:
             return  # this just means that there's no configured limit to the number of versions
 
-        manifests = sorted(self._query(MANIFEST_PREFIX))
+        manifests = sorted(self._query(MANIFEST_PREFIX + '.'))
         for manifest in manifests[:-max_versions]:
+            ts = manifest.split('.')[1]
             self._delete(manifest)
-            self._delete(manifest + MANIFEST_KEY_SUFFIX)
+            self._delete(MANIFEST_KEY_FILE.format(ts=ts))
 
     @abstractmethod
     def _save(self, src: IOIter, dest: str) -> None:  # pragma: no cover

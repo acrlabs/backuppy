@@ -24,6 +24,7 @@ def fake_filesystem(fs):
     fs.create_file('/scratch/foo', contents="i'm a copy of foo")
     fs.create_file('/scratch/asdf/bar', contents="i'm a copy of bar")
     fs.create_file('/fake/path/foo', contents='old boring content')
+    fs.create_file('/fake/path/biz/baz', contents='old boring content 2')
 
 
 def fake_output_func(content, tmp, loc, key, iv):
@@ -48,3 +49,16 @@ def test_load(mock_backup_store):
         mock_backup_store._load('/foo', output)
     with open('/restored_file') as f:
         assert f.read() == 'old boring content'
+
+
+def test_query(mock_backup_store):
+    assert set(mock_backup_store._query('')) == {'/biz/baz', '/foo'}
+
+
+def test_query_no_results(mock_backup_store):
+    assert mock_backup_store._query('not_here') == []
+
+
+def test_delete(mock_backup_store):
+    mock_backup_store._delete('/biz/baz')
+    assert not os.path.exists('/fake/path/biz/baz')

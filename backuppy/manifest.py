@@ -21,9 +21,9 @@ from backuppy.util import get_scratch_dir
 
 logger = colorlog.getLogger(__name__)
 MANIFEST_PREFIX = 'manifest'
-MANIFEST_KEY_SUFFIX = '.key'
+MANIFEST_KEY_SUFFIX = '-key'
 MANIFEST_FILE = MANIFEST_PREFIX + '.{ts}'
-MANIFEST_KEY_FILE = MANIFEST_FILE + MANIFEST_KEY_SUFFIX
+MANIFEST_KEY_FILE = MANIFEST_PREFIX + MANIFEST_KEY_SUFFIX + '.{ts}'
 _MANIFEST_TABLES = {'manifest', 'base_shas'}
 QueryResponse = Tuple[str, List['ManifestEntry']]
 
@@ -92,9 +92,9 @@ class Manifest:
         )
         rows = self._cursor.fetchall()
         tables = {r['name'] for r in rows}
-        if not (tables <= _MANIFEST_TABLES):
-            raise BackupCorruptedError(f'The manifest file does not have the right tables: {tables}')
-        if tables != _MANIFEST_TABLES:
+        if tables and not (tables == _MANIFEST_TABLES):
+            raise BackupCorruptedError(f'The manifest does not have the right tables: {tables}')
+        elif not tables:
             logger.info('This looks like a new manifest; initializing')
             self._create_manifest_tables()
 
@@ -300,7 +300,7 @@ def unlock_manifest(
     with IOIter() as encrypted_local_manifest, \
             IOIter(local_manifest_filename, check_mtime=False) as local_manifest:
         load(manifest_filename, encrypted_local_manifest)
-        decrypt_and_unpack(encrypted_local_manifest, local_manifest, key_pair, **options)
+        decrypt_and_unpack(encrypted_local_manifest, local_manifest, key_pair, options)
 
     return Manifest(local_manifest_filename)
 
@@ -314,6 +314,7 @@ def lock_manifest(
 
     timestamp = time.time()
     local_manifest_filename = manifest.filename
+    logger.debug(f'Locking manifest at {local_manifest_filename}')
 
     key_pair = b''
     if options['use_encryption']:
@@ -323,5 +324,5 @@ def lock_manifest(
             save(new_manifest_key, MANIFEST_KEY_FILE.format(ts=timestamp))
 
     with IOIter(local_manifest_filename) as local_manifest, IOIter() as encrypted_manifest:
-        compress_and_encrypt(local_manifest, encrypted_manifest, key_pair, **options)
+        compress_and_encrypt(local_manifest, encrypted_manifest, key_pair, options)
         save(encrypted_manifest, MANIFEST_FILE.format(ts=timestamp))
