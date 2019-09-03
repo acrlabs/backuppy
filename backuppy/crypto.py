@@ -38,7 +38,7 @@ def compress_and_encrypt(
     options: OptionsDict,
 ) -> bytes:
     """ Read data from an open file descriptor, and write the compressed, encrypted data to another
-    file descriptor
+    file descriptor; compute the HMAC of the encrypted data to ensure integrity
 
     :param input_file: an IOIter object to read plaintext data from
     :param output_file: an IOIter object to write compressed ciphertext to
@@ -75,7 +75,7 @@ def decrypt_and_unpack(
     options: OptionsDict,
 ) -> None:
     """ Read encrypted, GZIPed data from an open file descriptor, and write the decoded data to
-    another file descriptor
+    another file descriptor; verify the HMAC of the encrypted data to ensure integrity
 
     :param input_file: an IOIter object to read compressed ciphertext from
     :param output_file: an IOIter object to write plaintext data to
@@ -131,11 +131,20 @@ def generate_key_pair() -> bytes:
 
 
 def encrypt_and_sign(data: bytes, private_key_filename: str) -> bytes:
+    """ Use an RSA private key to encrypt and sign some data
+
+    :param data: the bytes to encrypt
+    :param private_key_filename: the location of the RSA private key file in PEM format
+    :returns: the encrypted data with signature appended
+    """
     private_key = _get_key(private_key_filename)
+
+    # the public key is used to encrypt, private key to decrypt
     encrypted_key_pair = private_key.public_key().encrypt(
         data,
         padding.OAEP(padding.MGF1(SHA256()), SHA256(), label=None),
     )
+    # the _private_ key is used to sign, the public key to verify
     signature = private_key.sign(
         data,
         padding.PSS(padding.MGF1(SHA256()), padding.PSS.MAX_LENGTH),
@@ -145,6 +154,14 @@ def encrypt_and_sign(data: bytes, private_key_filename: str) -> bytes:
 
 
 def decrypt_and_verify(data: bytes, private_key_filename: str) -> bytes:
+    """ Use an RSA private key to decrypt and verify some data
+
+    :param data: encrypted data with a signature appended
+    :param private_key_filename: the location of the RSA private key file in PEM format
+    :returns: the unencrypted data
+    :raises BackupCorruptedError: if the signature cannot be verified
+    """
+
     private_key = _get_key(private_key_filename)
     message, signature = data[:RSA_KEY_SIZE], data[RSA_KEY_SIZE:]
     key_pair = private_key.decrypt(

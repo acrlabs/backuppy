@@ -142,6 +142,17 @@ class Manifest:
         file_limit: Optional[int] = None,
         history_limit: Optional[int] = None,
     ) -> List[QueryResponse]:
+        """
+        Search the manifest for files matching a particular pattern; if no values are given, return
+        all files in the manifest
+
+        :param like: the pattern to search for
+        :param before_timestamp: only return results before this time
+        :param after_timestamp: only return results after this time
+        :param file_limit: return no more than this number of files
+        :param history_limit: only return this number of changes for a particular file
+        :returns: list of ManifestEntries that match the search
+        """
 
         if file_limit == 0 or history_limit == 0:
             return []
@@ -289,16 +300,28 @@ def unlock_manifest(
     load: Callable[[str, IOIter], IOIter],
     options: OptionsDict,
 ) -> Manifest:
+    """ Load a manifest into local storage and unencrypt it
+
+    :param manifest_filename: the name of the manifest to unlock
+    :param private_key_filename: the private key file in PEM format used to encrypt the
+        manifest's keypair
+    :param load: the _load function from the backup store
+    :param options: backup store options
+    :returns: the requested Manifest
+    """
     local_manifest_filename = path_join(get_scratch_dir(), manifest_filename)
     logger.debug(f'Unlocking manifest at {local_manifest_filename}')
 
+    # First use the private key to read the AES key and nonce used to encrypt the manifest
     key_pair = b''
     if options['use_encryption']:
         with IOIter() as manifest_key:
             load(manifest_filename + MANIFEST_KEY_SUFFIX, manifest_key)
+            # the key is not large enough to worry about chunked reads, so just do it all at once
             encrypted_key_pair = manifest_key.fd.read()
         key_pair = decrypt_and_verify(encrypted_key_pair, private_key_filename)
 
+    # Now use the key and nonce to decrypt the manifest
     with IOIter() as encrypted_local_manifest, \
             IOIter(local_manifest_filename, check_mtime=False) as local_manifest:
         load(manifest_filename, encrypted_local_manifest)
@@ -313,11 +336,22 @@ def lock_manifest(
     save: Callable[[IOIter, str], None],
     options: OptionsDict,
 ) -> None:
+    """ Save a manifest from local storage to the backup store
+
+    :param manifest: the manifest object to save
+    :param private_key_filename: the private key file in PEM format used to encrypt the
+        manifest's keypair
+    :param load: the _save function from the backup store
+    :param options: backup store options
+    :returns: the requested Manifest
+    """
 
     timestamp = time.time()
     local_manifest_filename = manifest.filename
     logger.debug(f'Locking manifest at {local_manifest_filename}')
 
+    # First generate a new key and nonce to encrypt the manifest, and save this key with
+    # the user's private RSA key
     key_pair = b''
     if options['use_encryption']:
         key_pair = generate_key_pair()
@@ -325,6 +359,7 @@ def lock_manifest(
             new_manifest_key.fd.write(encrypt_and_sign(key_pair, private_key_filename))
             save(new_manifest_key, MANIFEST_KEY_FILE.format(ts=timestamp))
 
+    # Next, use that key and nonce to encrypt and save the manifest
     with IOIter(local_manifest_filename) as local_manifest, \
             IOIter(local_manifest_filename + '.enc') as encrypted_manifest:
         compress_and_encrypt(local_manifest, encrypted_manifest, key_pair, options)

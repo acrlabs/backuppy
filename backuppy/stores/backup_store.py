@@ -137,7 +137,8 @@ class BackupStore(metaclass=ABCMeta):
                         key_pair,
                         None,
                     )
-                    self.save(new_file_copy, new_entry.sha, key_pair)
+                    signature = self.save(new_file_copy, new_entry.sha, key_pair)
+                    new_entry.key_pair = key_pair + signature  # append the HMAC before writing
                     self.manifest.insert_or_update(new_entry)
                 return  # test_m2_crash_after_file_save
 
@@ -174,7 +175,8 @@ class BackupStore(metaclass=ABCMeta):
                     # we backed it up and when we computed the diff
                     new_sha, fd_diff = compute_sha_and_diff(orig_file, new_file, diff_file)
                     new_entry.sha = new_sha
-                    self.save(fd_diff, new_entry.sha, key_pair)
+                    signature = self.save(fd_diff, new_entry.sha, key_pair)
+                    new_entry.key_pair = key_pair + signature
                     self.manifest.insert_or_update(new_entry)
 
             # If the sha is the same but metadata on the file has changed, we just store the updated
@@ -195,17 +197,22 @@ class BackupStore(metaclass=ABCMeta):
             else:
                 logger.info(f'{abs_file_name} is up to date!')
 
-    def save(self, src: IOIter, dest: str, key_pair: bytes) -> None:
-        """ Wrapper around the _save function that converts the SHA to a path and inserts data into
-        the manifest
+    def save(self, src: IOIter, dest: str, key_pair: bytes) -> bytes:
+        """ Wrapper around the _save function that converts the SHA to a path and does encryption
+
+        :param src: the file to save
+        :param dest: the name of the file to write to in the store
+        :param key_pair: an AES key + nonce to use to encrypt the file
+        :returns: the HMAC of the saved file
         """
         dest = sha_to_path(dest)
 
         # We compress and encrypt the file on the local file system, and then pass the encrypted
         # file to the backup store to handle atomically
         with IOIter(path_join(get_scratch_dir(), dest)) as encrypted_save_file:
-            compress_and_encrypt(src, encrypted_save_file, key_pair, self.options)
+            signature = compress_and_encrypt(src, encrypted_save_file, key_pair, self.options)
             self._save(encrypted_save_file, dest)  # test_f1_crash_file_save
+        return signature
 
     def load(self, src: str, dest: IOIter, key_pair: bytes) -> IOIter:
         """ Wrapper around the _load function that converts the SHA to a path """
