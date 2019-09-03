@@ -56,7 +56,7 @@ class BackupStore(metaclass=ABCMeta):
         self._manifest = None
 
     @contextmanager
-    def unlock(self, clean_up_afterwards=True) -> Iterator:
+    def unlock(self, preserve_scratch=False) -> Iterator:
         """
         Unlock the backup store and prep for work
 
@@ -68,43 +68,45 @@ class BackupStore(metaclass=ABCMeta):
         rmtree(get_scratch_dir())
         os.makedirs(get_scratch_dir(), exist_ok=True)
 
-        manifests = sorted(self._query(MANIFEST_PREFIX + '.'))
-        if not manifests:
-            logger.warning(
-                '''
-                ********************************************************************
-                This looks like a new backup location; if you are not expecting this
-                message, someone may be tampering with your backup!
-                ********************************************************************
-                '''
-            )
-            self._manifest = Manifest(os.path.join(
-                get_scratch_dir(),
-                MANIFEST_FILE.format(ts=time.time()),
-            ))
-        else:
-            self._manifest = unlock_manifest(
-                manifests[-1],
-                self.config.read('private_key_filename'),
-                self._load,
-                self.options,
-            )
+        try:
+            manifests = sorted(self._query(MANIFEST_PREFIX + '.'))
+            if not manifests:
+                logger.warning(
+                    '''
+                    ********************************************************************
+                    This looks like a new backup location; if you are not expecting this
+                    message, someone may be tampering with your backup!
+                    ********************************************************************
+                    '''
+                )
+                self._manifest = Manifest(os.path.join(
+                    get_scratch_dir(),
+                    MANIFEST_FILE.format(ts=time.time()),
+                ))
+            else:
+                self._manifest = unlock_manifest(
+                    manifests[-1],
+                    self.config.read('private_key_filename'),
+                    self._load,
+                    self.options,
+                )
 
-        yield
+            yield
 
-        if not self._manifest.changed:  # test_m1_crash_before_save
-            logger.info('No changes detected; nothing to do')
-        else:
-            lock_manifest(
-                self._manifest,
-                self.config.read('private_key_filename'),
-                self._save,
-                self.options,
-            )
-            self.rotate_manifests()
-        if clean_up_afterwards:
-            rmtree(get_scratch_dir())
-        self._manifest = None  # test_m1_crash_after_save
+            if not self._manifest.changed:  # test_m1_crash_before_save
+                logger.info('No changes detected; nothing to do')
+            else:
+                lock_manifest(
+                    self._manifest,
+                    self.config.read('private_key_filename'),
+                    self._save,
+                    self.options,
+                )
+                self.rotate_manifests()
+        finally:
+            if not preserve_scratch:
+                rmtree(get_scratch_dir())
+            self._manifest = None  # test_m1_crash_after_save
 
     def save_if_new(self, abs_file_name: str) -> None:
         """ The main workhorse function; determine if a file has changed, and if so, back it up!

@@ -104,17 +104,3 @@ def test_f3_file_changed_while_saving():
         sha_to_path(test_file_history[file_data_path][0].sha),
     )
     assert not os.path.exists(file_backup_path)
-
-
-@backup_itest_wrapper(
-    test_file_history,
-    _TestFileData('new_file_2', 'asdfhjkl'),
-)
-def test_f4_file_not_overwritten():
-    file_data_path = os.path.join(DATA_DIR, 'new_file_2')
-    file_backup_path = os.path.join(
-        BACKUP_DIR,
-        sha_to_path(test_file_history[file_data_path][1].sha),
-    )
-    with open(file_backup_path) as f:
-        assert f.read() == '@4|I4|hjkl'

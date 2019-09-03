@@ -1,4 +1,3 @@
-import os
 import sqlite3
 import time
 from typing import Callable
@@ -18,6 +17,7 @@ from backuppy.exceptions import BackupCorruptedError
 from backuppy.io import IOIter
 from backuppy.options import OptionsDict
 from backuppy.util import get_scratch_dir
+from backuppy.util import path_join
 
 logger = colorlog.getLogger(__name__)
 MANIFEST_PREFIX = 'manifest'
@@ -202,9 +202,11 @@ class Manifest:
         )
         if entry.base_sha:
             self._cursor.execute(
-                'insert or ignore into base_shas (sha, base_sha, base_key_pair) values (?, ?, ?)',
+                'insert or replace into base_shas (sha, base_sha, base_key_pair) values (?, ?, ?)',
                 (entry.sha, entry.base_sha, entry.base_key_pair),
             )
+        else:
+            self._cursor.execute('delete from base_shas where sha=?', (entry.sha,))
         self._commit()
 
     def delete(self, abs_file_name: str) -> None:
@@ -287,7 +289,7 @@ def unlock_manifest(
     load: Callable[[str, IOIter], IOIter],
     options: OptionsDict,
 ) -> Manifest:
-    local_manifest_filename = os.path.join(get_scratch_dir(), manifest_filename)
+    local_manifest_filename = path_join(get_scratch_dir(), manifest_filename)
     logger.debug(f'Unlocking manifest at {local_manifest_filename}')
 
     key_pair = b''
@@ -319,10 +321,11 @@ def lock_manifest(
     key_pair = b''
     if options['use_encryption']:
         key_pair = generate_key_pair()
-        with IOIter() as new_manifest_key:
+        with IOIter(local_manifest_filename + '.key') as new_manifest_key:
             new_manifest_key.fd.write(encrypt_and_sign(key_pair, private_key_filename))
             save(new_manifest_key, MANIFEST_KEY_FILE.format(ts=timestamp))
 
-    with IOIter(local_manifest_filename) as local_manifest, IOIter() as encrypted_manifest:
+    with IOIter(local_manifest_filename) as local_manifest, \
+            IOIter(local_manifest_filename + '.enc') as encrypted_manifest:
         compress_and_encrypt(local_manifest, encrypted_manifest, key_pair, options)
         save(encrypted_manifest, MANIFEST_FILE.format(ts=timestamp))

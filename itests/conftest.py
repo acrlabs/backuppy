@@ -10,20 +10,22 @@ from shutil import rmtree
 import mock
 import pytest
 
+from backuppy.manifest import MANIFEST_FILE
+from backuppy.manifest import MANIFEST_PREFIX
 from backuppy.run import main
-from backuppy.stores.backup_store import MANIFEST_PATH
 
 ITEST_ROOT = 'itests'
 ITEST_CONFIG = os.path.join(ITEST_ROOT, 'itest.conf')
 DATA_DIRS = [os.path.join(ITEST_ROOT, 'data'), os.path.join(ITEST_ROOT, 'data2')]
 BACKUP_DIR = os.path.join(ITEST_ROOT, 'backup')
 RESTORE_DIR = os.path.join(ITEST_ROOT, 'restore')
-ITEST_MANIFEST_PATH = os.path.join(BACKUP_DIR, MANIFEST_PATH)
+ITEST_MANIFEST_PATH = os.path.join(BACKUP_DIR, MANIFEST_FILE)
 ITEST_SCRATCH = os.path.join(ITEST_ROOT, 'scratch')
 BACKUP_ARGS = [
     '--log-level', 'debug',
     '--config', ITEST_CONFIG,
     'backup',
+    '--preserve-scratch-dir',
 ]
 
 
@@ -31,6 +33,14 @@ def compute_sha(string):
     sha_fn = sha256()
     sha_fn.update(string)
     return sha_fn.hexdigest()
+
+
+def get_latest_manifest():
+    return sorted([
+        os.path.join(BACKUP_DIR, f)
+        for f in os.listdir(BACKUP_DIR)
+        if f.startswith(MANIFEST_PREFIX + '.')
+    ])[-1]
 
 
 @pytest.fixture(autouse=True, scope='module')

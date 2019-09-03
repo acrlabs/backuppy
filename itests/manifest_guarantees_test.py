@@ -8,7 +8,7 @@ from itests.conftest import _TestFileData
 from itests.conftest import BACKUP_DIR
 from itests.conftest import backup_itest_wrapper
 from itests.conftest import DATA_DIRS
-from itests.conftest import ITEST_MANIFEST_PATH
+from itests.conftest import get_latest_manifest
 from itests.conftest import ItestException
 
 test_file_history = dict()  # type: ignore
@@ -20,7 +20,7 @@ def abort():
 
 
 def assert_manifest_correct(before):
-    manifest_conn = sqlite3.connect(ITEST_MANIFEST_PATH)
+    manifest_conn = sqlite3.connect(get_latest_manifest())
     manifest_conn.row_factory = sqlite3.Row
     manifest_cursor = manifest_conn.cursor()
 
@@ -28,9 +28,9 @@ def assert_manifest_correct(before):
     rows = manifest_cursor.fetchall()
     assert len(rows) == (3 if before else 4)
     for row in rows:
-        start_pos = row[1].find(DATA_DIR)
-        filename = row[1][start_pos:]
-        assert row[2] in set([tfd.sha for tfd in test_file_history[filename]])
+        start_pos = row['abs_file_name'].find(DATA_DIR)
+        filename = row['abs_file_name'][start_pos:]
+        assert row['sha'] in set([tfd.sha for tfd in test_file_history[filename]])
 
 
 @pytest.fixture(autouse=True, scope='module')
@@ -73,7 +73,7 @@ def test_m1_crash_after_save():
     side_effect=(abort, None),
 )
 def test_m2_crash_before_file_save():
-    manifest_conn = sqlite3.connect(ITEST_MANIFEST_PATH)
+    manifest_conn = sqlite3.connect(get_latest_manifest())
     manifest_conn.row_factory = sqlite3.Row
     manifest_cursor = manifest_conn.cursor()
 
@@ -87,11 +87,11 @@ def test_m2_crash_before_file_save():
     side_effect=(abort, None),
 )
 def test_m2_crash_after_file_save():
-    manifest_conn = sqlite3.connect(ITEST_MANIFEST_PATH)
+    manifest_conn = sqlite3.connect(get_latest_manifest())
     manifest_conn.row_factory = sqlite3.Row
     manifest_cursor = manifest_conn.cursor()
 
     manifest_cursor.execute('select * from manifest where abs_file_name like "%another_file"')
     rows = manifest_cursor.fetchall()
     assert len(rows) == 1
-    assert rows[0][2] == test_file_history[os.path.join(DATA_DIR, 'another_file')][0].sha
+    assert rows[0]['sha'] == test_file_history[os.path.join(DATA_DIR, 'another_file')][0].sha

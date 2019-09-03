@@ -38,6 +38,17 @@ def subparser(command: str, description: str, entrypoint: Callable) -> Callable:
     return decorator
 
 
+def add_preserve_scratch_arg(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        '--preserve-scratch-dir',
+        action='store_true',
+        help=(
+            'Keep the configured "scratch directory" around after job completes '
+            '(WARNING: may take up a lot of disk space)'
+        )
+    )
+
+
 def parse_args(
     description: str,
     arg_list: Optional[List[str]],

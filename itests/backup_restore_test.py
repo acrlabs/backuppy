@@ -11,11 +11,12 @@ from backuppy.blob import apply_diff
 from backuppy.cli.restore import main as restore
 from backuppy.io import IOIter
 from backuppy.util import file_walker
+from backuppy.util import path_join
 from itests.conftest import _TestFileData
 from itests.conftest import BACKUP_DIR
 from itests.conftest import backup_itest_wrapper
+from itests.conftest import get_latest_manifest
 from itests.conftest import ITEST_CONFIG
-from itests.conftest import ITEST_MANIFEST_PATH
 from itests.conftest import RESTORE_DIR
 
 test_file_history = dict()  # type: ignore
@@ -30,6 +31,7 @@ RESTORE_ARGS = argparse.Namespace(
     name='data1_backup',
     sha=None,
     like='',
+    preserve_scratch_dir=True,
 )
 
 
@@ -43,7 +45,8 @@ def clear_restore():
 
 
 def assert_backup_store_correct():
-    manifest_conn = sqlite3.connect(ITEST_MANIFEST_PATH)
+    latest_manifest = get_latest_manifest()
+    manifest_conn = sqlite3.connect(latest_manifest)
     manifest_conn.row_factory = sqlite3.Row
     manifest_cursor = manifest_conn.cursor()
     for path, history in test_file_history.items():
@@ -60,12 +63,12 @@ def assert_backup_store_correct():
         else:
             assert len(rows) == len(history)
             for row, expected in zip(rows, history):
-                assert row[2] == expected.sha
-                assert row[-2] == expected.mode
+                assert row['sha'] == expected.sha
+                assert row['mode'] == expected.mode
 
         if latest.backup_path:
             manifest_cursor.execute(
-                'select * from diff_pairs where sha=?',
+                'select * from base_shas where sha=?',
                 (latest.sha,),
             )
             row = manifest_cursor.fetchone()
@@ -73,8 +76,7 @@ def assert_backup_store_correct():
                 if not row or not row[1]:
                     assert n.fd.read() == latest.contents
                 else:
-                    orig_file_path = os.path.join(
-                        BACKUP_DIR, row[1][:2], row[1][2:4], row[1][4:])
+                    orig_file_path = path_join(BACKUP_DIR, row[1][:2], row[1][2:4], row[1][4:])
                     with IOIter(orig_file_path) as o, IOIter() as tmp:
                         apply_diff(o, n, tmp)
                         tmp.fd.seek(0)

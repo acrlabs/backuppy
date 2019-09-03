@@ -7,6 +7,7 @@ from typing import Set
 import colorlog
 import staticconf
 
+from backuppy.args import add_preserve_scratch_arg
 from backuppy.args import subparser
 from backuppy.stores import get_backup_store
 from backuppy.stores.backup_store import BackupStore
@@ -61,7 +62,7 @@ def main(args: argparse.Namespace) -> None:
         logger.info(f'Starting backup for {backup_name}')
         backup_store = get_backup_store(backup_name)
 
-        with backup_store.unlock():
+        with backup_store.unlock(args.preserve_scratch_dir):
             marked_files: Set[str] = set()
             for base_path in staticconf.read_list('directories', namespace=backup_name):
                 abs_base_path = os.path.abspath(base_path)
@@ -78,4 +79,4 @@ def main(args: argparse.Namespace) -> None:
 
 @subparser('backup', 'perform a backup of all configured locations', main)
 def add_backup_parser(subparser) -> None:  # pragma: no cover
-    pass
+    add_preserve_scratch_arg(subparser)

@@ -58,7 +58,3 @@ the event of a non-graceful shutdown such as power loss that data corruption or 
 
 (F3) If the file contents change while trying to back up the file, an error will occur to avoid
     corrupted backup data.
-
-(F4) Data that is in the store shall never be deleted or overwritten.  Since the stores are indexed
-    by sha, it doesn't matter where the data "came from" if the sha matches.  Files that have been
-    deleted will instead just be marked as "not present" in the manifest.

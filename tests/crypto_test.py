@@ -14,7 +14,7 @@ from backuppy.crypto import compress_and_encrypt
 from backuppy.crypto import decrypt_and_unpack
 from backuppy.crypto import decrypt_and_verify
 from backuppy.crypto import encrypt_and_sign
-from backuppy.crypto import RSA_KEY_SIZE
+from backuppy.crypto import RSA_KEY_SIZE_BITS
 from backuppy.exceptions import BackupCorruptedError
 from tests.conftest import count_matching_log_lines
 
@@ -110,7 +110,7 @@ def test_decrypt_and_unpack(caplog, mock_open_streams):
 
 def test_rsa():
     to_encrypt = b'abcdefgh'
-    private_key = generate_private_key(65537, RSA_KEY_SIZE * 8, default_backend())
+    private_key = generate_private_key(65537, RSA_KEY_SIZE_BITS, default_backend())
     with mock.patch('backuppy.crypto._get_key', return_value=private_key):
         encrypted_data = encrypt_and_sign(to_encrypt, '/fake/private_key_file')
         message = decrypt_and_verify(encrypted_data, '/fake/private_key_file')
@@ -119,7 +119,7 @@ def test_rsa():
 
 def test_rsa_bad_signature():
     to_encrypt = b'abcdefgh'
-    private_key = generate_private_key(65537, RSA_KEY_SIZE * 8, default_backend())
+    private_key = generate_private_key(65537, RSA_KEY_SIZE_BITS, default_backend())
     with mock.patch('backuppy.crypto._get_key', return_value=private_key):
         encrypted_data = encrypt_and_sign(to_encrypt, '/fake/private_key_file')
         corrupted_data = encrypted_data[:-2] + bytes([encrypted_data[-1] - 1])

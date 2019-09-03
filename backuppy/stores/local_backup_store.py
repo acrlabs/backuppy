@@ -29,7 +29,7 @@ class LocalBackupStore(BackupStore):
                 f'{abs_backup_path} already exists in the store; overwriting with new data',
             )
 
-        logger.info(f'Writing {src} to {abs_backup_path}')  # test_f2_lbs_atomicity_1
+        logger.info(f'Writing {src.filename} to {abs_backup_path}')  # test_f2_lbs_atomicity_1
         shutil.move(src.filename, abs_backup_path)
         return  # test_f2_lbs_atomicity_2
 

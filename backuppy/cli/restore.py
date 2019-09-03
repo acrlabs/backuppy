@@ -8,6 +8,7 @@ from typing import Tuple
 import staticconf
 from tabulate import tabulate
 
+from backuppy.args import add_preserve_scratch_arg
 from backuppy.args import subparser
 from backuppy.blob import apply_diff
 from backuppy.io import IOIter
@@ -92,7 +93,7 @@ def main(args: argparse.Namespace) -> None:
     staticconf.DictConfiguration(backup_set_config, namespace=args.name)
     backup_store = get_backup_store(args.name)
 
-    with backup_store.unlock():
+    with backup_store.unlock(args.preserve_scratch_dir):
         files_to_restore: List[ManifestEntry]
         if args.sha:
             files_to_restore = backup_store.manifest.get_entries_by_sha(args.sha)
@@ -139,3 +140,4 @@ def add_restore_parser(subparser) -> None:  # pragma: no cover
         '--dest',
         help='Location to restore the file(s) to (default: current directory)'
     )
+    add_preserve_scratch_arg(subparser)

@@ -22,6 +22,7 @@ GZIP_START = b'\x1f\x8b'
 AES_KEY_SIZE = 32    # 256 bits
 AES_BLOCK_SIZE = 16  # 128 bits
 RSA_KEY_SIZE = 512   # 4096 bits
+RSA_KEY_SIZE_BITS = RSA_KEY_SIZE * 8
 
 
 def identity(x: bytes, y: int = 0) -> bytes:
@@ -141,10 +142,13 @@ def decrypt_and_verify(data: bytes, private_key_filename: str) -> bytes:
 
 
 def _get_key(private_key_filename: str) -> RSAPrivateKey:
-    with open(private_key_filename) as priv_kf:
+    with open(private_key_filename, 'rb') as priv_kf:
         private_key = serialization.load_pem_private_key(priv_kf.read(), None, default_backend())
 
-    if private_key.key_size != RSA_KEY_SIZE:
-        raise ValueError(f'Backuppy requires a {RSA_KEY_SIZE} private key')
+    if private_key.key_size != RSA_KEY_SIZE_BITS:
+        raise ValueError(
+            f'Backuppy requires a {RSA_KEY_SIZE_BITS}-bit private key, '
+            f'this is {private_key.key_size} bits'
+        )
 
     return private_key
