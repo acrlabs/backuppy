@@ -28,8 +28,9 @@ backups:
       type: (local|ssh|rsync|s3)
       <protocol-specific-options>
     options:
-      disable_encryption: (true|false)
-      disable_compression: (true|false)
+      - max_manifest_versions: (int)
+        use_encryption: (true|false)
+        use_compression: (true|false)
 ```
 
 Currently the `local` protocol is the only supported protocol.  It takes a single parameter,

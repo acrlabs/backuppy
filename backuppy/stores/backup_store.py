@@ -86,7 +86,7 @@ class BackupStore(metaclass=ABCMeta):
             else:
                 self._manifest = unlock_manifest(
                     manifests[-1],
-                    self.config.read('private_key_filename'),
+                    self.config.read('private_key_filename', default=''),
                     self._load,
                     self.options,
                 )
@@ -98,7 +98,7 @@ class BackupStore(metaclass=ABCMeta):
             else:
                 lock_manifest(
                     self._manifest,
-                    self.config.read('private_key_filename'),
+                    self.config.read('private_key_filename', default=''),
                     self._save,
                     self.options,
                 )

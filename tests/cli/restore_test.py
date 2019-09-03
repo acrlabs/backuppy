@@ -100,6 +100,7 @@ def test_main(retval, sha, entries):
             like='',
             name='fake_backup1',
             sha=sha,
+            preserve_scratch_dir=False,
         ))
         assert mock_restore.call_count == int(retval)
         if entries and retval:

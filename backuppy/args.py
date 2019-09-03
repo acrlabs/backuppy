@@ -38,7 +38,7 @@ def subparser(command: str, description: str, entrypoint: Callable) -> Callable:
     return decorator
 
 
-def add_preserve_scratch_arg(parser: argparse.ArgumentParser) -> None:
+def add_preserve_scratch_arg(parser: argparse.ArgumentParser) -> None:  # pragma: no cover
     parser.add_argument(
         '--preserve-scratch-dir',
         action='store_true',

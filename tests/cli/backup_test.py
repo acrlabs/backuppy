@@ -35,7 +35,7 @@ def test_main():
         store = mock_get_store.return_value
         store.manifest.files.return_value = {'/file1', '/file2', '/file3', '/file4'}
         mock_scan.side_effect = [{'/file1', '/file2', '/file3'}, {'/file1'}, {'/file2', '/file3'}]
-        main(argparse.Namespace(config='backuppy.conf'))
+        main(argparse.Namespace(config='backuppy.conf', preserve_scratch_dir=False))
         assert mock_scan.call_count == 3
         for i in range(3):
             assert mock_scan.call_args_list[i][0][0] == f'/path/{i}'

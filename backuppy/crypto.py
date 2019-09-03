@@ -12,6 +12,7 @@ from cryptography.hazmat.primitives.ciphers import Cipher
 from cryptography.hazmat.primitives.ciphers.algorithms import AES
 from cryptography.hazmat.primitives.ciphers.modes import CTR
 from cryptography.hazmat.primitives.hashes import SHA256
+from cryptography.hazmat.primitives.hmac import HMAC
 
 from backuppy.exceptions import BackupCorruptedError
 from backuppy.io import IOIter
@@ -35,7 +36,7 @@ def compress_and_encrypt(
     output_file: IOIter,
     key_pair: bytes,
     options: OptionsDict,
-) -> None:
+) -> bytes:
     """ Read data from an open file descriptor, and write the compressed, encrypted data to another
     file descriptor
 
@@ -48,6 +49,8 @@ def compress_and_encrypt(
         Cipher(AES(key), CTR(nonce), backend=default_backend()).encryptor().update
         if options['use_encryption'] else identity
     )
+    hmac = HMAC(key, SHA256(), default_backend())
+
     writer = output_file.writer(); next(writer)
     logger.debug2('starting to compress')
     for block in input_file.reader():
@@ -55,7 +58,14 @@ def compress_and_encrypt(
         logger.debug2(f'zip_fn returned {len(block)} bytes')
         block = encrypt_fn(block)
         logger.debug2(f'encrypt_fn returned {len(block)} bytes')
+        if options['use_encryption']:
+            hmac.update(block)
         writer.send(block)
+
+    if options['use_encryption']:
+        return hmac.finalize()
+    else:
+        return b''
 
 
 def decrypt_and_unpack(
@@ -70,14 +80,21 @@ def decrypt_and_unpack(
     :param input_file: an IOIter object to read compressed ciphertext from
     :param output_file: an IOIter object to write plaintext data to
     """
-    key, nonce = key_pair[:AES_KEY_SIZE], key_pair[AES_KEY_SIZE:]
+    key, nonce, signature = (
+        key_pair[:AES_KEY_SIZE],
+        key_pair[AES_KEY_SIZE:AES_KEY_SIZE + AES_BLOCK_SIZE],
+        key_pair[AES_KEY_SIZE + AES_BLOCK_SIZE:]
+    )
     decrypted_data = b''
     decrypt_fn: Callable[[bytes], bytes] = (
         Cipher(AES(key), CTR(nonce), backend=default_backend()).decryptor().update
         if options['use_encryption'] else identity
     )
+    hmac = HMAC(key, SHA256(), default_backend())
     writer = output_file.writer(); next(writer)
     for block in input_file.reader():
+        if options['use_encryption']:
+            hmac.update(block)
         decrypted_data += decrypt_fn(block)
         logger.debug2(f'decrypt_fn returned {len(decrypted_data)} bytes')
 
@@ -101,6 +118,12 @@ def decrypt_and_unpack(
         block = gzip.decompress(decrypted_data) if options['use_compression'] else decrypted_data
         logger.debug2(f'unzip_fn returned {len(block)} bytes')
         writer.send(block)
+
+    try:
+        if options['use_encryption']:
+            hmac.verify(signature)
+    except InvalidSignature as e:
+        raise BackupCorruptedError("The file's signature did not match the data") from e
 
 
 def generate_key_pair() -> bytes:

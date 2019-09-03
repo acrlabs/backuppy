@@ -68,6 +68,7 @@ def test_main(after, before, details):
         like=None,
         name='fake_backup1',
         sha_length=17,
+        preserve_scratch_dir=False,
     )
     with mock.patch('backuppy.cli.list.get_backup_store') as mock_get_store, \
             mock.patch('backuppy.cli.list.staticconf.YamlConfiguration'), \
