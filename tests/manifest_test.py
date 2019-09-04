@@ -248,7 +248,8 @@ def test_unlock_manifest(use_encryption):
     mock_load = mock.Mock()
     with mock.patch('backuppy.manifest.IOIter'), \
             mock.patch('backuppy.manifest.decrypt_and_verify') as mock_decrypt_pub_key, \
-            mock.patch('backuppy.manifest.decrypt_and_unpack'):
+            mock.patch('backuppy.manifest.decrypt_and_unpack'), \
+            mock.patch('backuppy.manifest.Manifest'):
         unlock_manifest(
             'my_manifest.sqlite',
             '/path/to/private/key',
