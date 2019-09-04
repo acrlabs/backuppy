@@ -20,10 +20,10 @@ from backuppy.util import get_scratch_dir
 from backuppy.util import path_join
 
 logger = colorlog.getLogger(__name__)
-MANIFEST_PREFIX = 'manifest'
-MANIFEST_KEY_SUFFIX = '-key'
-MANIFEST_FILE = MANIFEST_PREFIX + '.{ts}'
-MANIFEST_KEY_FILE = MANIFEST_PREFIX + MANIFEST_KEY_SUFFIX + '.{ts}'
+MANIFEST_PREFIX = 'manifest.'
+MANIFEST_KEY_PREFIX = 'manifest-key.'
+MANIFEST_FILE = MANIFEST_PREFIX + '{ts}'
+MANIFEST_KEY_FILE = MANIFEST_KEY_PREFIX + '{ts}'
 _MANIFEST_TABLES = {'manifest', 'base_shas'}
 QueryResponse = Tuple[str, List['ManifestEntry']]
 
@@ -316,8 +316,10 @@ def unlock_manifest(
     key_pair = b''
     if options['use_encryption']:
         with IOIter() as manifest_key:
-            load(manifest_filename + MANIFEST_KEY_SUFFIX, manifest_key)
+            ts = manifest_filename.split('.', 1)[1]
+            load(MANIFEST_KEY_FILE.format(ts=ts), manifest_key)
             # the key is not large enough to worry about chunked reads, so just do it all at once
+            manifest_key.fd.seek(0)
             encrypted_key_pair = manifest_key.fd.read()
         key_pair = decrypt_and_verify(encrypted_key_pair, private_key_filename)
 
@@ -350,17 +352,19 @@ def lock_manifest(
     local_manifest_filename = manifest.filename
     logger.debug(f'Locking manifest at {local_manifest_filename}')
 
-    # First generate a new key and nonce to encrypt the manifest, and save this key with
-    # the user's private RSA key
+    # First generate a new key and nonce to encrypt the manifest
     key_pair = b''
     if options['use_encryption']:
         key_pair = generate_key_pair()
-        with IOIter(local_manifest_filename + '.key') as new_manifest_key:
-            new_manifest_key.fd.write(encrypt_and_sign(key_pair, private_key_filename))
-            save(new_manifest_key, MANIFEST_KEY_FILE.format(ts=timestamp))
 
     # Next, use that key and nonce to encrypt and save the manifest
     with IOIter(local_manifest_filename) as local_manifest, \
             IOIter(local_manifest_filename + '.enc') as encrypted_manifest:
-        compress_and_encrypt(local_manifest, encrypted_manifest, key_pair, options)
+        signature = compress_and_encrypt(local_manifest, encrypted_manifest, key_pair, options)
         save(encrypted_manifest, MANIFEST_FILE.format(ts=timestamp))
+
+    # Finally, save the manifest key/nonce along with its HMAC using the user's private key
+    if options['use_encryption']:
+        with IOIter(local_manifest_filename + '.key') as new_manifest_key:
+            new_manifest_key.fd.write(encrypt_and_sign(key_pair + signature, private_key_filename))
+            save(new_manifest_key, MANIFEST_KEY_FILE.format(ts=timestamp))

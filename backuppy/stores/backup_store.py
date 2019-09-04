@@ -65,11 +65,11 @@ class BackupStore(metaclass=ABCMeta):
         circumvent some of the IOIter functionality and do it ourselves.  We wrap this in a
         context manager so this can be abstracted away and still ensure that proper cleanup happens.
         """
-        rmtree(get_scratch_dir())
+        rmtree(get_scratch_dir(), ignore_errors=True)
         os.makedirs(get_scratch_dir(), exist_ok=True)
 
         try:
-            manifests = sorted(self._query(MANIFEST_PREFIX + '.'))
+            manifests = sorted(self._query(MANIFEST_PREFIX))
             if not manifests:
                 logger.warning(
                     '''
@@ -105,7 +105,7 @@ class BackupStore(metaclass=ABCMeta):
                 self.rotate_manifests()
         finally:
             if not preserve_scratch:
-                rmtree(get_scratch_dir())
+                rmtree(get_scratch_dir(), ignore_errors=True)
             self._manifest = None  # test_m1_crash_after_save
 
     def save_if_new(self, abs_file_name: str) -> None:
@@ -229,9 +229,9 @@ class BackupStore(metaclass=ABCMeta):
         if not max_versions:
             return  # this just means that there's no configured limit to the number of versions
 
-        manifests = sorted(self._query(MANIFEST_PREFIX + '.'))
+        manifests = sorted(self._query(MANIFEST_PREFIX))
         for manifest in manifests[:-max_versions]:
-            ts = manifest.split('.')[1]
+            ts = manifest.split('.', 1)[1]
             self._delete(manifest)
             self._delete(MANIFEST_KEY_FILE.format(ts=ts))
 
@@ -263,7 +263,7 @@ class BackupStore(metaclass=ABCMeta):
     @property
     def options(self) -> OptionsDict:
         try:
-            options = self.config.read_list('options')[0]
+            options = self.config.read_list('options', default=[{}])[0]
         except IndexError:
             options = dict()
 

@@ -85,6 +85,7 @@ def _restore(
 
 
 def main(args: argparse.Namespace) -> None:
+    staticconf.DictConfiguration({'yes': args.yes})
     destination, destination_str = _parse_destination(args.dest, args.name)
     before_timestamp = parse_time(args.before) if args.before else int(time.time())
 
@@ -138,6 +139,12 @@ def add_restore_parser(subparser) -> None:  # pragma: no cover
     )
     subparser.add_argument(
         '--dest',
-        help='Location to restore the file(s) to (default: current directory)'
+        default='.',
+        help='Location to restore the file(s) to'
+    )
+    subparser.add_argument(
+        '-y', '--yes',
+        action='store_true',
+        help='Answer yes to all prompts',
     )
     add_preserve_scratch_arg(subparser)

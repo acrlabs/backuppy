@@ -10,11 +10,15 @@ from typing import Optional
 from typing import Pattern
 
 import dateparser
+import staticconf
 
 from backuppy.exceptions import InputParseError
 
 
 def ask_for_confirmation(prompt: str, default: str = 'y'):
+    if staticconf.read_bool('yes', default=False):
+        return True
+
     yes = 'Y' if default.lower() == 'y' else 'y'
     no = 'n' if default.lower() == 'y' else 'N'
 

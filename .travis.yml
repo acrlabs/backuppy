@@ -6,3 +6,4 @@ install: pip install tox
 script:
     - make test
     - make itest
+    - make e2e

@@ -32,6 +32,7 @@ RESTORE_ARGS = argparse.Namespace(
     sha=None,
     like='',
     preserve_scratch_dir=True,
+    yes=False,
 )
 
 

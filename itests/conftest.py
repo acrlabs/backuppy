@@ -39,7 +39,7 @@ def get_latest_manifest():
     return sorted([
         os.path.join(BACKUP_DIR, f)
         for f in os.listdir(BACKUP_DIR)
-        if f.startswith(MANIFEST_PREFIX + '.')
+        if f.startswith(MANIFEST_PREFIX)
     ])[-1]
 
 

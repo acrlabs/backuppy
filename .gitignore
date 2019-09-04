@@ -39,3 +39,6 @@ __pycache__
 itests/backup
 itests/data*
 itests/scratch
+itests/restore
+e2e/backup
+e2e/restore
