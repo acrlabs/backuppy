@@ -4,7 +4,9 @@ import mock
 import pytest
 import staticconf.testing
 
+from backuppy.exceptions import DiffTooLargeException
 from backuppy.exceptions import ManifestLockedException
+from backuppy.manifest import ManifestEntry
 from backuppy.stores.backup_store import BackupStore
 from backuppy.util import get_scratch_dir
 from tests.conftest import count_matching_log_lines
@@ -15,13 +17,27 @@ def mock_save_load(request):
     if 'no_mocksaveload' in request.keywords:
         yield
     else:
-        with mock.patch('backuppy.stores.backup_store.BackupStore.save'), \
+        with mock.patch('backuppy.stores.backup_store.BackupStore.save', return_value=b'2222'), \
                 mock.patch('backuppy.stores.backup_store.BackupStore.load'):
             yield
 
 
 @pytest.fixture
-def backup_store(dummy_save_load=True):
+def current_entry():
+    return ManifestEntry(
+        '/foo',
+        'abcdef123',
+        None,
+        1000,
+        1000,
+        12345,
+        b'aaaaa2222',
+        None,
+    )
+
+
+@pytest.fixture
+def backup_store():
     backup_name = 'fake_backup1'
 
     class DummyBackupStore(BackupStore):
@@ -31,11 +47,9 @@ def backup_store(dummy_save_load=True):
         _query = mock.Mock(return_value=[])
 
     with mock.patch('backuppy.stores.backup_store.IOIter') as mock_io_iter:
-        mock_io_iter.return_value.__enter__.return_value.stat.return_value = mock.Mock(
-            st_uid=1000,
-            st_gid=1000,
-            st_mode=12345,
-        )
+        mock_io_iter.return_value.__enter__.return_value.uid = 1000
+        mock_io_iter.return_value.__enter__.return_value.gid = 1000
+        mock_io_iter.return_value.__enter__.return_value.mode = 12345
         store = DummyBackupStore(backup_name)
         store._manifest = mock.Mock()
         yield store
@@ -78,43 +92,51 @@ def test_open_locked_manifest(backup_store):
 
 def test_save_if_new_with_new_file(backup_store):
     backup_store.manifest.get_entry.return_value = None
-    with mock.patch('backuppy.stores.backup_store.io_copy') as mock_copy:
-        mock_copy.return_value = 'abcdef123'
+    backup_store._write_copy = mock.Mock()
+    backup_store._write_diff = mock.Mock()
+    with mock.patch('backuppy.stores.backup_store.compute_sha', return_value=None):
         backup_store.save_if_new('/foo')
-        assert mock_copy.call_count == 1
-        assert backup_store.save.call_args[0][1] == 'abcdef123'
-        assert backup_store.load.call_count == 0
-        assert backup_store.manifest.insert_or_update.call_count == 1
+    assert backup_store._write_copy.call_count == 1
+    assert backup_store._write_diff.call_count == 0
+    assert backup_store.manifest.insert_or_update.call_count == 1
 
 
-@pytest.mark.parametrize('base_sha', [None, '123456abc'])
-def test_save_if_new_sha_different(backup_store, base_sha):
-    backup_store.manifest.get_entry.return_value = mock.Mock(sha='abcdef123', base_sha=base_sha)
-    with mock.patch('backuppy.stores.backup_store.io_copy') as mock_copy, \
-            mock.patch('backuppy.stores.backup_store.compute_sha') as mock_compute_sha, \
-            mock.patch('backuppy.stores.backup_store.compute_sha_and_diff') as mock_compute_sha_diff:
-        mock_compute_sha.return_value = '321fedcba'
-        mock_compute_sha_diff.return_value = ('111111111', mock.Mock())
+def test_save_if_new_sha_different(backup_store):
+    backup_store.manifest.get_entry.return_value = mock.Mock(sha='abcdef123')
+    backup_store._write_copy = mock.Mock()
+    backup_store._write_diff = mock.Mock()
+    with mock.patch('backuppy.stores.backup_store.compute_sha', return_value='321fedcba'):
         backup_store.save_if_new('/foo')
-        assert mock_copy.call_count == 0
-        assert backup_store.save.call_args[0][1] == '111111111'
-        assert backup_store.load.call_count == 1
-        assert backup_store.manifest.insert_or_update.call_count == 1
+    assert backup_store._write_copy.call_count == 0
+    assert backup_store._write_diff.call_count == 1
+    assert backup_store.manifest.insert_or_update.call_count == 1
 
 
 @pytest.mark.parametrize('uid_changed', [True, False])
 def test_save_if_new_sha_equal(backup_store, uid_changed):
     entry = mock.Mock(sha='abcdef123', uid=(2000 if uid_changed else 1000), gid=1000, mode=12345)
     backup_store.manifest.get_entry.return_value = entry
-    with mock.patch('backuppy.stores.backup_store.io_copy') as mock_copy, \
-            mock.patch('backuppy.stores.backup_store.compute_sha') as mock_compute_sha, \
-            mock.patch('backuppy.stores.backup_store.ManifestEntry', return_value=entry):
-        mock_compute_sha.return_value = 'abcdef123'
+    backup_store._write_copy = mock.Mock()
+    backup_store._write_diff = mock.Mock()
+    with mock.patch('backuppy.stores.backup_store.compute_sha', return_value='abcdef123'):
         backup_store.save_if_new('/foo')
-        assert mock_copy.call_count == 0
-        assert backup_store._save.call_count == 0
-        assert backup_store._load.call_count == 0
-        assert backup_store.manifest.insert_or_update.call_count == int(uid_changed)
+    assert backup_store._write_copy.call_count == 0
+    assert backup_store._write_diff.call_count == 0
+    assert backup_store.manifest.insert_or_update.call_count == int(uid_changed)
+
+
+def test_save_if_new_skip_diff(backup_store):
+    backup_store._write_copy = mock.Mock()
+    backup_store._write_diff = mock.Mock()
+    with mock.patch('backuppy.stores.backup_store.compute_sha', return_value='321fedcba'), \
+            staticconf.testing.PatchConfiguration(
+                {'options': [{'skip_diff_patterns': ['.*oo']}]},
+                namespace='fake_backup1',
+    ):
+        backup_store.save_if_new('/foo')
+    assert backup_store._write_copy.call_count == 1
+    assert backup_store._write_diff.call_count == 0
+    assert backup_store.manifest.insert_or_update.call_count == 1
 
 
 @pytest.mark.no_mocksaveload
@@ -155,3 +177,38 @@ def test_rotate_manifests(backup_store, max_manifest_versions):
             mock.call('manifest.1234'),
             mock.call('manifest-key.1234'),
         ]
+
+
+def test_write_copy(backup_store):
+    with mock.patch('backuppy.stores.backup_store.generate_key_pair', return_value=b'11111'), \
+            mock.patch('backuppy.stores.backup_store.io_copy', return_value='12345678'):
+        entry = backup_store._write_copy('/foo', mock.MagicMock())
+        assert entry.sha == '12345678'
+        assert entry.key_pair == b'111112222'
+
+
+@pytest.mark.parametrize('base_sha', [None, '321fedcba'])
+def test_write_diff(backup_store, current_entry, base_sha):
+    current_entry.base_sha = base_sha
+    if base_sha:
+        current_entry.base_key_pair = b'bbbbb3333'
+    with mock.patch('backuppy.stores.backup_store.generate_key_pair', return_value=b'11111'), \
+            mock.patch('backuppy.stores.backup_store.compute_sha_and_diff') as mock_sha_diff:
+        mock_sha_diff.return_value = ('12345678', mock.Mock())
+        entry = backup_store._write_diff('/foo', current_entry, mock.MagicMock())
+    assert entry.sha == '12345678'
+    assert entry.base_sha == ('321fedcba' if base_sha else 'abcdef123')
+    assert entry.key_pair == b'111112222'
+    assert entry.base_key_pair == (b'bbbbb3333' if base_sha else b'aaaaa2222')
+
+
+def test_write_diff_too_big(backup_store, current_entry):
+    with mock.patch('backuppy.stores.backup_store.generate_key_pair', return_value=b'11111'), \
+            mock.patch('backuppy.stores.backup_store.compute_sha_and_diff') as mock_sha_diff, \
+            mock.patch('backuppy.stores.backup_store.io_copy', return_value='12345678'):
+        mock_sha_diff.side_effect = DiffTooLargeException
+        entry = backup_store._write_diff('/foo', current_entry, mock.MagicMock())
+        assert entry.sha == '12345678'
+        assert entry.base_sha is None
+        assert entry.key_pair == b'111112222'
+        assert entry.base_key_pair is None

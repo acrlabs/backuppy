@@ -5,6 +5,7 @@ import pytest
 from backuppy.blob import apply_diff
 from backuppy.blob import compute_sha_and_diff
 from backuppy.exceptions import DiffParseError
+from backuppy.exceptions import DiffTooLargeException
 
 
 @pytest.fixture
@@ -117,3 +118,11 @@ def test_compute_sha_and_diff_new_long(mock_open_streams, sha_fn):
     sha, diff = compute_sha_and_diff(orig, new, diff)
     assert diff._fd.getvalue() == b'@9|I1|s@10|I2|df@12|I1|a'
     assert sha == sha_fn.hexdigest()
+
+
+def test_compute_sha_and_diff_with_large_diff(mock_open_streams):
+    orig, new, diff = mock_open_streams
+    new._fd.write(b'asdfasdfasdfa')
+    new._fd.seek(0)
+    with pytest.raises(DiffTooLargeException):
+        compute_sha_and_diff(orig, new, diff, 0.5)

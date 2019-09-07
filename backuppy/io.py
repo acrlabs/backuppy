@@ -37,7 +37,7 @@ class IOIter:
         self._mode = 'r+b'
         self._sha_fn: Optional[_hashlib.HASH] = None
         self._should_check_mtime = check_mtime
-        self._mtime: Optional[int] = None
+        self._enter_mtime: Optional[int] = None
 
     def __enter__(self) -> 'IOIter':
         """ Context manager function to open the file (the file will be created if it doesn't exist)
@@ -51,7 +51,7 @@ class IOIter:
             os.makedirs(os.path.dirname(self.filename), exist_ok=True)
             fd = os.open(self.filename, os.O_CREAT | os.O_RDWR | O_BINARY, mode=0o600)
             self._fd = os.fdopen(fd, 'r+b')
-            self._mtime = int(self.stat().st_mtime)
+            self._enter_mtime = self.mtime
         else:
             self._fd = TemporaryFile(self._mode)
         self.fd.seek(0)
@@ -61,7 +61,7 @@ class IOIter:
         """ Context manager cleanup; closes the file """
         self._fd.close()
         self._fd = None
-        self._mtime = None
+        self._enter_mtime = None
 
     def reader(
         self,
@@ -113,13 +113,6 @@ class IOIter:
             raise BufferError('No SHA has been computed')
         return self._sha_fn.hexdigest()
 
-    def stat(self) -> os.stat_result:
-        """ Return a stat struct for the file """
-        if self.filename:
-            return os.stat(self.filename)
-        else:
-            raise BufferError('No stat for temporary file')
-
     def _check_mtime(self) -> None:
         """ Check to see if the file has been modified during writing (this isn't guaranteed to
         be correct, because there are other ways to set the mtime to make it look like the file
@@ -130,13 +123,40 @@ class IOIter:
             block
         """
         if self.filename and self._should_check_mtime:
-            if not self._mtime:
+            if not self._enter_mtime:
                 raise BufferError(
                     f"{self.filename} is missing an mtime; probably it hasn't been opened")
-            mtime = int(self.stat().st_mtime)
-            if mtime != self._mtime:
+            if self.mtime != self._enter_mtime:
                 raise FileChangedException(
-                    f'{self.filename} changed while reading; {mtime} != {self._mtime}')
+                    f'{self.filename} changed while reading; {self.mtime} != {self._enter_mtime}')
+
+    @property
+    def uid(self) -> int:
+        if self.filename:
+            return os.stat(self.filename).st_uid
+        else:
+            raise BufferError('No stat for temporary file')
+
+    @property
+    def gid(self) -> int:
+        if self.filename:
+            return os.stat(self.filename).st_gid
+        else:
+            raise BufferError('No stat for temporary file')
+
+    @property
+    def mode(self) -> int:
+        if self.filename:
+            return os.stat(self.filename).st_mode
+        else:
+            raise BufferError('No stat for temporary file')
+
+    @property
+    def mtime(self) -> int:
+        if self.filename:
+            return int(os.stat(self.filename).st_mtime)
+        else:
+            raise BufferError('No stat for temporary file')
 
     @property
     def fd(self):

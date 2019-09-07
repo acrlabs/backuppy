@@ -30,7 +30,13 @@ def test_tmp_io_iter(fs):
         tmp._check_mtime()
         assert mock_tmp_file.call_count == 1
         with pytest.raises(BufferError):
-            tmp.stat()
+            tmp.uid
+        with pytest.raises(BufferError):
+            tmp.gid
+        with pytest.raises(BufferError):
+            tmp.mode
+        with pytest.raises(BufferError):
+            tmp.mtime
 
 
 def test_context_manager(mock_io_iter):
@@ -101,6 +107,14 @@ def test_check_mtime(mock_io_iter):
         with open('/foo', 'wb') as f, pytest.raises(FileChangedException):
             f.write(b'asdf')
             mock_io_iter._check_mtime()
+
+
+def test_stat(mock_io_iter):
+    with mock_io_iter:
+        assert mock_io_iter.uid == 1000
+        assert mock_io_iter.gid == 1000
+        assert mock_io_iter.mode == 33152
+        assert mock_io_iter.mtime == int(os.stat('/foo').st_mtime)
 
 
 def test_compute_sha(mock_io_iter, foo_contents):

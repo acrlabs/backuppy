@@ -67,6 +67,13 @@ def get_scratch_dir() -> str:
     return os.path.join(gettempdir(), 'backuppy')
 
 
+def regex_search_list(needle: str, haystack: List[str]):
+    for pattern in haystack:
+        if re.search(pattern, needle):
+            return True
+    return False
+
+
 def parse_time(input_str: str) -> int:
     dt = dateparser.parse(input_str)
     if not dt:

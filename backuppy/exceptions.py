@@ -10,6 +10,10 @@ class BackupReadFailedException(BackuppyException):
     pass
 
 
+class DiffTooLargeException(BackuppyException):
+    pass
+
+
 class DiffParseError(BackuppyException):
     pass
 

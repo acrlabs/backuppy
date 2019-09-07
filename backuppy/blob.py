@@ -1,10 +1,13 @@
+import os
 import re
 from itertools import zip_longest
+from typing import Optional
 from typing import Tuple
 
 import edlib
 
 from backuppy.exceptions import DiffParseError
+from backuppy.exceptions import DiffTooLargeException
 from backuppy.io import IOIter
 
 # This file will read and write diff file for backuppy.
@@ -92,6 +95,7 @@ def compute_sha_and_diff(
     orig_file: IOIter,
     new_file: IOIter,
     diff_file: IOIter,
+    discard_diff_percentage: Optional[float] = None,
 ) -> Tuple[str, IOIter]:
     """ Given an open original file and a new file, compute the diff between the two
 
@@ -100,8 +104,9 @@ def compute_sha_and_diff(
     :param diff_file: an IOIter object where the diff data will be written
     """
 
-    pos = 0
+    pos, diff_size = 0, 0
     writer = diff_file.writer(); next(writer)
+    orig_size = os.fstat(orig_file.fd.fileno()).st_size
     for orig_bytes, new_bytes in zip_longest(orig_file.reader(), new_file.reader()):
         if not orig_bytes:
             steps = [(len(new_bytes), Token.INS)]
@@ -128,6 +133,9 @@ def compute_sha_and_diff(
                 contents = new_bytes[local_pos - num:local_pos]
             diff += f'{num}'.encode('utf-8') + Token.SEP + contents
         writer.send(diff)
+        diff_size += len(diff)
+        if discard_diff_percentage and diff_size > discard_diff_percentage * orig_size:
+            raise DiffTooLargeException
         pos += orig_file.block_size
 
     return new_file.sha(), diff_file
