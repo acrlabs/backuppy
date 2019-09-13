@@ -58,7 +58,7 @@ class BackupStore(metaclass=ABCMeta):
         self._manifest = None
 
     @contextmanager
-    def unlock(self, preserve_scratch=False) -> Iterator:
+    def unlock(self, dry_run=False, preserve_scratch=False) -> Iterator:
         """
         Unlock the backup store and prep for work
 
@@ -97,7 +97,7 @@ class BackupStore(metaclass=ABCMeta):
 
             if not self._manifest.changed:  # test_m1_crash_before_save
                 logger.info('No changes detected; nothing to do')
-            else:
+            elif not dry_run:
                 lock_manifest(
                     self._manifest,
                     self.config.read('private_key_filename', default=''),
@@ -110,7 +110,7 @@ class BackupStore(metaclass=ABCMeta):
                 rmtree(get_scratch_dir(), ignore_errors=True)
             self._manifest = None  # test_m1_crash_after_save
 
-    def save_if_new(self, abs_file_name: str) -> None:
+    def save_if_new(self, abs_file_name: str, dry_run: bool) -> None:
         """ The main workhorse function; determine if a file has changed, and if so, back it up!
 
         :param abs_file_name: the name of the file under consideration
@@ -123,14 +123,14 @@ class BackupStore(metaclass=ABCMeta):
             # new copy; we make a copy here to ensure that the contents don't change while backing
             # the file up, and that we have the correct sha
             if not curr_entry or not curr_entry.sha:
-                new_entry = self._write_copy(abs_file_name, new_file)
+                new_entry = self._write_copy(abs_file_name, new_file, dry_run)
 
             # If the file has been backed up, check to see if it's changed by comparing shas
             elif new_sha != curr_entry.sha:
                 if regex_search_list(abs_file_name, self.options['skip_diff_patterns']):
-                    new_entry = self._write_copy(abs_file_name, new_file)
+                    new_entry = self._write_copy(abs_file_name, new_file, dry_run)
                 else:
-                    new_entry = self._write_diff(abs_file_name, curr_entry, new_file)
+                    new_entry = self._write_diff(abs_file_name, curr_entry, new_file, dry_run)
 
             # If the sha is the same but metadata on the file has changed, we just store the updated
             # metadata
@@ -153,7 +153,7 @@ class BackupStore(metaclass=ABCMeta):
             else:
                 logger.info(f'{abs_file_name} is up to date!')
 
-            if new_entry:
+            if new_entry and not dry_run:
                 self.manifest.insert_or_update(new_entry)
             return  # test_m2_crash_after_file_save
 
@@ -195,7 +195,7 @@ class BackupStore(metaclass=ABCMeta):
             self._delete(manifest)
             self._delete(MANIFEST_KEY_FILE.format(ts=ts))
 
-    def _write_copy(self, abs_file_name: str, file_obj: IOIter) -> ManifestEntry:
+    def _write_copy(self, abs_file_name: str, file_obj: IOIter, dry_run: bool) -> ManifestEntry:
         logger.info(f'Saving a new copy of {abs_file_name}')
 
         key_pair = generate_key_pair()
@@ -211,8 +211,9 @@ class BackupStore(metaclass=ABCMeta):
                 key_pair,
                 None,
             )
-            signature = self.save(file_copy, new_entry.sha, key_pair)
-            new_entry.key_pair = key_pair + signature  # append the HMAC before writing to db
+            if not dry_run:
+                signature = self.save(file_copy, new_entry.sha, key_pair)
+                new_entry.key_pair = key_pair + signature  # append the HMAC before writing to db
         return new_entry
 
     def _write_diff(
@@ -220,6 +221,7 @@ class BackupStore(metaclass=ABCMeta):
         abs_file_name: str,
         curr_entry: ManifestEntry,
         file_obj: IOIter,
+        dry_run: bool,
     ) -> ManifestEntry:
         logger.info(f'Saving a diff for {abs_file_name}')
 
@@ -250,7 +252,7 @@ class BackupStore(metaclass=ABCMeta):
                     '(you can configure this threshold with the skip_diff_percentage option)'
                 )
                 file_obj.fd.seek(0)
-                return self._write_copy(abs_file_name, file_obj)
+                return self._write_copy(abs_file_name, file_obj, dry_run)
 
             new_entry = ManifestEntry(
                 abs_file_name,
@@ -264,8 +266,9 @@ class BackupStore(metaclass=ABCMeta):
             )
 
             new_entry.sha = new_sha
-            signature = self.save(fd_diff, new_entry.sha, key_pair)
-            new_entry.key_pair = key_pair + signature
+            if not dry_run:
+                signature = self.save(fd_diff, new_entry.sha, key_pair)
+                new_entry.key_pair = key_pair + signature
         return new_entry
 
     @abstractmethod

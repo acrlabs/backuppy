@@ -90,42 +90,46 @@ def test_open_locked_manifest(backup_store):
         backup_store.manifest
 
 
-def test_save_if_new_with_new_file(backup_store):
+@pytest.mark.parametrize('dry_run', [True, False])
+def test_save_if_new_with_new_file(backup_store, dry_run):
     backup_store.manifest.get_entry.return_value = None
     backup_store._write_copy = mock.Mock()
     backup_store._write_diff = mock.Mock()
     with mock.patch('backuppy.stores.backup_store.compute_sha', return_value=None):
-        backup_store.save_if_new('/foo')
+        backup_store.save_if_new('/foo', dry_run)
     assert backup_store._write_copy.call_count == 1
     assert backup_store._write_diff.call_count == 0
-    assert backup_store.manifest.insert_or_update.call_count == 1
+    assert backup_store.manifest.insert_or_update.call_count == int(not dry_run)
 
 
-def test_save_if_new_sha_different(backup_store):
+@pytest.mark.parametrize('dry_run', [True, False])
+def test_save_if_new_sha_different(backup_store, dry_run):
     backup_store.manifest.get_entry.return_value = mock.Mock(sha='abcdef123')
     backup_store._write_copy = mock.Mock()
     backup_store._write_diff = mock.Mock()
     with mock.patch('backuppy.stores.backup_store.compute_sha', return_value='321fedcba'):
-        backup_store.save_if_new('/foo')
+        backup_store.save_if_new('/foo', dry_run)
     assert backup_store._write_copy.call_count == 0
     assert backup_store._write_diff.call_count == 1
-    assert backup_store.manifest.insert_or_update.call_count == 1
+    assert backup_store.manifest.insert_or_update.call_count == int(not dry_run)
 
 
 @pytest.mark.parametrize('uid_changed', [True, False])
-def test_save_if_new_sha_equal(backup_store, uid_changed):
+@pytest.mark.parametrize('dry_run', [True, False])
+def test_save_if_new_sha_equal(backup_store, uid_changed, dry_run):
     entry = mock.Mock(sha='abcdef123', uid=(2000 if uid_changed else 1000), gid=1000, mode=12345)
     backup_store.manifest.get_entry.return_value = entry
     backup_store._write_copy = mock.Mock()
     backup_store._write_diff = mock.Mock()
     with mock.patch('backuppy.stores.backup_store.compute_sha', return_value='abcdef123'):
-        backup_store.save_if_new('/foo')
+        backup_store.save_if_new('/foo', dry_run)
     assert backup_store._write_copy.call_count == 0
     assert backup_store._write_diff.call_count == 0
-    assert backup_store.manifest.insert_or_update.call_count == int(uid_changed)
+    assert backup_store.manifest.insert_or_update.call_count == int(uid_changed and not dry_run)
 
 
-def test_save_if_new_skip_diff(backup_store):
+@pytest.mark.parametrize('dry_run', [True, False])
+def test_save_if_new_skip_diff(backup_store, dry_run):
     backup_store._write_copy = mock.Mock()
     backup_store._write_diff = mock.Mock()
     with mock.patch('backuppy.stores.backup_store.compute_sha', return_value='321fedcba'), \
@@ -133,10 +137,10 @@ def test_save_if_new_skip_diff(backup_store):
                 {'options': [{'skip_diff_patterns': ['.*oo']}]},
                 namespace='fake_backup1',
     ):
-        backup_store.save_if_new('/foo')
+        backup_store.save_if_new('/foo', dry_run)
     assert backup_store._write_copy.call_count == 1
     assert backup_store._write_diff.call_count == 0
-    assert backup_store.manifest.insert_or_update.call_count == 1
+    assert backup_store.manifest.insert_or_update.call_count == int(not dry_run)
 
 
 @pytest.mark.no_mocksaveload
@@ -179,36 +183,48 @@ def test_rotate_manifests(backup_store, max_manifest_versions):
         ]
 
 
-def test_write_copy(backup_store):
+@pytest.mark.parametrize('dry_run', [True, False])
+def test_write_copy(backup_store, dry_run, caplog):
     with mock.patch('backuppy.stores.backup_store.generate_key_pair', return_value=b'11111'), \
             mock.patch('backuppy.stores.backup_store.io_copy', return_value='12345678'):
-        entry = backup_store._write_copy('/foo', mock.MagicMock())
-        assert entry.sha == '12345678'
-        assert entry.key_pair == b'111112222'
+        entry = backup_store._write_copy('/foo', mock.MagicMock(), dry_run)
+    assert entry.sha == '12345678'
+    # no signature computed in dry-run mode
+    assert entry.key_pair == b'111112222' if not dry_run else b'11111'
+    assert backup_store.save.call_count == int(not dry_run)
+    assert 'Saving a new copy of /foo' in caplog.text
 
 
 @pytest.mark.parametrize('base_sha', [None, '321fedcba'])
-def test_write_diff(backup_store, current_entry, base_sha):
+@pytest.mark.parametrize('dry_run', [True, False])
+def test_write_diff(backup_store, current_entry, base_sha, dry_run, caplog):
     current_entry.base_sha = base_sha
     if base_sha:
         current_entry.base_key_pair = b'bbbbb3333'
     with mock.patch('backuppy.stores.backup_store.generate_key_pair', return_value=b'11111'), \
             mock.patch('backuppy.stores.backup_store.compute_sha_and_diff') as mock_sha_diff:
         mock_sha_diff.return_value = ('12345678', mock.Mock())
-        entry = backup_store._write_diff('/foo', current_entry, mock.MagicMock())
+        entry = backup_store._write_diff('/foo', current_entry, mock.MagicMock(), dry_run)
     assert entry.sha == '12345678'
     assert entry.base_sha == ('321fedcba' if base_sha else 'abcdef123')
-    assert entry.key_pair == b'111112222'
+    # no signature computed in dry-run mode
+    assert entry.key_pair == b'111112222' if not dry_run else b'11111'
     assert entry.base_key_pair == (b'bbbbb3333' if base_sha else b'aaaaa2222')
+    assert backup_store.save.call_count == int(not dry_run)
+    assert 'Saving a diff for /foo' in caplog.text
 
 
-def test_write_diff_too_big(backup_store, current_entry):
+@pytest.mark.parametrize('dry_run', [True, False])
+def test_write_diff_too_big(backup_store, current_entry, dry_run, caplog):
     with mock.patch('backuppy.stores.backup_store.generate_key_pair', return_value=b'11111'), \
             mock.patch('backuppy.stores.backup_store.compute_sha_and_diff') as mock_sha_diff, \
             mock.patch('backuppy.stores.backup_store.io_copy', return_value='12345678'):
         mock_sha_diff.side_effect = DiffTooLargeException
-        entry = backup_store._write_diff('/foo', current_entry, mock.MagicMock())
-        assert entry.sha == '12345678'
-        assert entry.base_sha is None
-        assert entry.key_pair == b'111112222'
-        assert entry.base_key_pair is None
+        entry = backup_store._write_diff('/foo', current_entry, mock.MagicMock(), dry_run)
+    assert entry.sha == '12345678'
+    assert entry.base_sha is None
+    # no signature computed in dry-run mode
+    assert entry.key_pair == b'111112222' if not dry_run else b'11111'
+    assert entry.base_key_pair is None
+    assert backup_store.save.call_count == int(not dry_run)
+    assert 'Saving a new copy of /foo' in caplog.text

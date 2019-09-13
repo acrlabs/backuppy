@@ -3,16 +3,17 @@ import os
 import re
 import sys
 import traceback
-from contextlib import ExitStack
+from contextlib import contextmanager
 from hashlib import sha256
 from shutil import rmtree
 
 import mock
 import pytest
 
+from backuppy.config import setup_config
 from backuppy.manifest import MANIFEST_FILE
 from backuppy.manifest import MANIFEST_PREFIX
-from backuppy.run import main
+from backuppy.run import setup_logging
 
 ITEST_ROOT = 'itests'
 ITEST_CONFIG = os.path.join(ITEST_ROOT, 'itest.conf')
@@ -21,12 +22,6 @@ BACKUP_DIR = os.path.join(ITEST_ROOT, 'backup')
 RESTORE_DIR = os.path.join(ITEST_ROOT, 'restore')
 ITEST_MANIFEST_PATH = os.path.join(BACKUP_DIR, MANIFEST_FILE)
 ITEST_SCRATCH = os.path.join(ITEST_ROOT, 'scratch')
-BACKUP_ARGS = [
-    '--log-level', 'debug',
-    '--config', ITEST_CONFIG,
-    'backup',
-    '--preserve-scratch-dir',
-]
 
 
 def compute_sha(string):
@@ -43,14 +38,20 @@ def get_latest_manifest():
     ])[-1]
 
 
+@pytest.fixture(autouse=True, scope='session')
+def initialize_session():
+    setup_config(ITEST_CONFIG)
+    setup_logging('debug')
+
+
 @pytest.fixture(autouse=True, scope='module')
-def initialize():
-    try:
-        [rmtree(d) for d in DATA_DIRS]
-        rmtree(BACKUP_DIR)
-        rmtree(ITEST_SCRATCH)
-    except FileNotFoundError:
-        pass
+def initialize_module():
+    sys.settrace(lambda a, b, c: None)
+    for d in DATA_DIRS + [BACKUP_DIR, ITEST_SCRATCH]:
+        try:
+            rmtree(d)
+        except FileNotFoundError:
+            pass
 
     [os.makedirs(d) for d in DATA_DIRS]
     os.makedirs(BACKUP_DIR)
@@ -101,7 +102,7 @@ def make_trace_func(search_string, side_effect):
         if event == 'call':
             try:
                 module = inspect.getmodule(frame)
-            except TypeError:
+            except (TypeError, AttributeError):
                 return None
             if module and not module.__name__.startswith('backuppy'):
                 if not hasattr(frame, 'f_trace_lines'):
@@ -124,34 +125,26 @@ def make_trace_func(search_string, side_effect):
     return trace_func
 
 
-def backup_itest_wrapper(
+@contextmanager
+def itest_setup(
     test_file_history,
     *dec_args,
-    side_effect=None,
 ):
-    def decorator(test_case):
-        def wrapper(*args, **kwargs):
-            context = side_effect[1] if side_effect and side_effect[1] else ExitStack()
-            for tfd in dec_args:
-                if tfd.path in test_file_history and tfd != test_file_history[tfd.path][-1]:
-                    test_file_history[tfd.path].append(tfd)
-                    tfd.write()
-                elif tfd.path not in test_file_history:
-                    test_file_history[tfd.path] = [tfd]
-                    tfd.write()
+    print('Setting up!')
+    for tfd in dec_args:
+        if tfd.path in test_file_history and tfd != test_file_history[tfd.path][-1]:
+            test_file_history[tfd.path].append(tfd)
+            tfd.write()
+        elif tfd.path not in test_file_history:
+            test_file_history[tfd.path] = [tfd]
+            tfd.write()
 
-            if side_effect and side_effect[0]:
-                sys.settrace(make_trace_func(test_case.__name__, side_effect[0]))
-            else:
-                sys.settrace(lambda a, b, c: None)
-            with mock.patch('backuppy.stores.backup_store.get_scratch_dir') as mock_scratch, \
-                    mock.patch('backuppy.util.shuffle') as mock_shuffle:
-                # make sure tests are repeatable, no directory-shuffling
-                mock_shuffle.side_effect = lambda l: l.sort()
-                mock_scratch.return_value = ITEST_SCRATCH
-                with context:
-                    main(BACKUP_ARGS)
-                test_case(*args, **kwargs)
-
-        return wrapper
-    return decorator
+    with mock.patch('backuppy.stores.backup_store.get_scratch_dir') as mock_scratch_1, \
+            mock.patch('backuppy.manifest.get_scratch_dir') as mock_scratch_2, \
+            mock.patch('backuppy.util.shuffle') as mock_shuffle, \
+            mock.patch('backuppy.cli.restore.ask_for_confirmation', return_value=True):
+        # make sure tests are repeatable, no directory-shuffling
+        mock_shuffle.side_effect = lambda l: l.sort()
+        mock_scratch_1.return_value = ITEST_SCRATCH
+        mock_scratch_2.return_value = ITEST_SCRATCH
+        yield

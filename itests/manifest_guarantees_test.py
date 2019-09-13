@@ -1,18 +1,29 @@
+import argparse
 import os
 import sqlite3
+import sys
 
 import pytest
 
+from backuppy.cli.backup import main as backup
 from backuppy.util import sha_to_path
 from itests.conftest import _TestFileData
 from itests.conftest import BACKUP_DIR
-from itests.conftest import backup_itest_wrapper
 from itests.conftest import DATA_DIRS
 from itests.conftest import get_latest_manifest
+from itests.conftest import ITEST_CONFIG
+from itests.conftest import itest_setup
 from itests.conftest import ItestException
+from itests.conftest import make_trace_func
 
 test_file_history = dict()  # type: ignore
 DATA_DIR = DATA_DIRS[0]
+BACKUP_ARGS = argparse.Namespace(
+    log_level='debug',
+    config=ITEST_CONFIG,
+    preserve_scratch_dir=True,
+    dry_run=False,
+)
 
 
 def abort():
@@ -34,22 +45,24 @@ def assert_manifest_correct(before):
 
 
 @pytest.fixture(autouse=True, scope='module')
-@backup_itest_wrapper(
-    test_file_history,
-    _TestFileData('foo', 'asdf'),
-    _TestFileData('bar', 'hjkl'),
-    _TestFileData('baz/buz', 'qwerty'),
-)
 def setup_manifest():
-    pass
+    with itest_setup(
+        test_file_history,
+        _TestFileData('foo', 'asdf'),
+        _TestFileData('bar', 'hjkl'),
+        _TestFileData('baz/buz', 'qwerty'),
+    ):
+        backup(BACKUP_ARGS)
+        yield
 
 
-@backup_itest_wrapper(
-    test_file_history,
-    _TestFileData('foo', 'asdfhjkl'),
-    side_effect=(abort, pytest.raises(Exception)),
-)
 def test_m1_crash_before_save():
+    sys.settrace(make_trace_func('test_m1_crash_before_save', abort))
+    with itest_setup(
+        test_file_history,
+        _TestFileData('foo', 'asdfhjkl'),
+    ), pytest.raises(Exception):
+        backup(BACKUP_ARGS)
     assert_manifest_correct(before=True)
     file_data_path = os.path.join(DATA_DIR, 'foo')
     file_backup_path = os.path.join(
@@ -59,20 +72,20 @@ def test_m1_crash_before_save():
     assert os.path.exists(file_backup_path)
 
 
-@backup_itest_wrapper(
-    test_file_history,
-    side_effect=(abort, pytest.raises(Exception)),
-)
 def test_m1_crash_after_save():
+    sys.settrace(make_trace_func('test_m1_crash_after_save', abort))
+    with itest_setup(test_file_history), pytest.raises(Exception):
+        backup(BACKUP_ARGS)
     assert_manifest_correct(before=False)
 
 
-@backup_itest_wrapper(
-    test_file_history,
-    _TestFileData('another_file', '1234'),
-    side_effect=(abort, None),
-)
 def test_m2_crash_before_file_save():
+    sys.settrace(make_trace_func('test_m2_crash_before_file_save', abort))
+    with itest_setup(
+        test_file_history,
+        _TestFileData('another_file', '1234'),
+    ):
+        backup(BACKUP_ARGS)
     manifest_conn = sqlite3.connect(get_latest_manifest())
     manifest_conn.row_factory = sqlite3.Row
     manifest_cursor = manifest_conn.cursor()
@@ -82,11 +95,10 @@ def test_m2_crash_before_file_save():
     assert not rows
 
 
-@backup_itest_wrapper(
-    test_file_history,
-    side_effect=(abort, None),
-)
 def test_m2_crash_after_file_save():
+    sys.settrace(make_trace_func('test_m2_crash_after_file_save', abort))
+    with itest_setup(test_file_history):
+        backup(BACKUP_ARGS)
     manifest_conn = sqlite3.connect(get_latest_manifest())
     manifest_conn.row_factory = sqlite3.Row
     manifest_cursor = manifest_conn.cursor()

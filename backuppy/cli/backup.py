@@ -21,6 +21,7 @@ def _scan_directory(
     abs_base_path: str,
     backup_store: BackupStore,
     exclusions: List[Pattern],
+    dry_run: bool,
 ) -> Set[str]:
     """ scan a directory looking for changes from the manifest
 
@@ -44,7 +45,7 @@ def _scan_directory(
         marked_files.add(abs_file_name)
 
         try:
-            backup_store.save_if_new(abs_file_name)
+            backup_store.save_if_new(abs_file_name, dry_run)
         except Exception as e:
             # We never want to hard-fail a backup just because one file crashed; we'd rather back up
             # as much as we can, and log the failures for further investigation
@@ -59,24 +60,37 @@ def _scan_directory(
 def main(args: argparse.Namespace) -> None:
     """ entry point for the 'backup' subcommand """
     for backup_name, backup_config in staticconf.read('backups').items():
+        if args.dry_run:
+            logger.warning('Running in dry-run mode; no files will be backed up!')
         logger.info(f'Starting backup for {backup_name}')
         backup_store = get_backup_store(backup_name)
 
-        with backup_store.unlock(args.preserve_scratch_dir):
+        with backup_store.unlock(args.dry_run, args.preserve_scratch_dir):
             marked_files: Set[str] = set()
             for base_path in staticconf.read_list('directories', namespace=backup_name):
                 abs_base_path = os.path.abspath(base_path)
                 exclusions = compile_exclusions(
                     staticconf.read_list('exclusions', [], namespace=backup_name)
                 )
-                marked_files |= _scan_directory(abs_base_path, backup_store, exclusions)
+                marked_files |= _scan_directory(
+                    abs_base_path,
+                    backup_store,
+                    exclusions,
+                    args.dry_run,
+                )
 
             for abs_file_name in backup_store.manifest.files() - marked_files:
                 logger.info(f'{abs_file_name} has been deleted')
-                backup_store.manifest.delete(abs_file_name)
+                if not args.dry_run:
+                    backup_store.manifest.delete(abs_file_name)
         logger.info(f'Backup for {backup_name} finished')
 
 
 @subparser('backup', 'perform a backup of all configured locations', main)
 def add_backup_parser(subparser) -> None:  # pragma: no cover
+    subparser.add_argument(
+        '--dry-run',
+        action='store_true',
+        help='Only print what would happen, do not perform any actions',
+    )
     add_preserve_scratch_arg(subparser)
