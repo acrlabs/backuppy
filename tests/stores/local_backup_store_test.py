@@ -23,8 +23,8 @@ def mock_backup_store():
 def fake_filesystem(fs):
     fs.create_file('/scratch/foo', contents="i'm a copy of foo")
     fs.create_file('/scratch/asdf/bar', contents="i'm a copy of bar")
-    fs.create_file('/fake/path/foo', contents='old boring content')
-    fs.create_file('/fake/path/biz/baz', contents='old boring content 2')
+    fs.create_file('/fake/path/fake_backup/foo', contents='old boring content')
+    fs.create_file('/fake/path/fake_backup/biz/baz', contents='old boring content 2')
 
 
 def fake_output_func(content, tmp, loc, key, iv):
@@ -36,11 +36,11 @@ def test_save(caplog, mock_backup_store):
     with IOIter('/scratch/foo') as input1, IOIter('/scratch/asdf/bar') as input2:
         mock_backup_store._save(input1, '/foo')
         mock_backup_store._save(input2, '/asdf/bar')
-    assert os.path.exists('/fake/path/foo')
-    with open('/fake/path/foo', 'r') as f:
+    assert os.path.exists('/fake/path/fake_backup/foo')
+    with open('/fake/path/fake_backup/foo', 'r') as f:
         assert f.read() == "i'm a copy of foo"
-    assert os.path.exists('/fake/path/asdf/bar')
-    with open('/fake/path/asdf/bar', 'r') as f:
+    assert os.path.exists('/fake/path/fake_backup/asdf/bar')
+    with open('/fake/path/fake_backup/asdf/bar', 'r') as f:
         assert f.read() == "i'm a copy of bar"
 
 
@@ -61,4 +61,4 @@ def test_query_no_results(mock_backup_store):
 
 def test_delete(mock_backup_store):
     mock_backup_store._delete('/biz/baz')
-    assert not os.path.exists('/fake/path/biz/baz')
+    assert not os.path.exists('/fake/path/fake_backup/biz/baz')

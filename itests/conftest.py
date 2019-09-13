@@ -18,7 +18,7 @@ from backuppy.run import setup_logging
 ITEST_ROOT = 'itests'
 ITEST_CONFIG = os.path.join(ITEST_ROOT, 'itest.conf')
 DATA_DIRS = [os.path.join(ITEST_ROOT, 'data'), os.path.join(ITEST_ROOT, 'data2')]
-BACKUP_DIR = os.path.join(ITEST_ROOT, 'backup')
+BACKUP_DIR = os.path.join(ITEST_ROOT, 'backup', 'data1_backup')
 RESTORE_DIR = os.path.join(ITEST_ROOT, 'restore')
 ITEST_MANIFEST_PATH = os.path.join(BACKUP_DIR, MANIFEST_FILE)
 ITEST_SCRATCH = os.path.join(ITEST_ROOT, 'scratch')

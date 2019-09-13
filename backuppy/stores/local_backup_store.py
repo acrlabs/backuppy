@@ -18,7 +18,10 @@ class LocalBackupStore(BackupStore):
 
     def __init__(self, backup_name):
         super().__init__(backup_name)
-        self.backup_location = os.path.abspath(self.config.read_string('protocol.location'))
+        self.backup_location = os.path.abspath(path_join(
+            self.config.read_string('protocol.location'),
+            backup_name,
+        ))
 
     def _save(self, src: IOIter, dest: str) -> None:
         assert src.filename  # can't have a tmpfile here

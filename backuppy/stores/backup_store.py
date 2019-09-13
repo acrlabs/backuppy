@@ -67,6 +67,8 @@ class BackupStore(metaclass=ABCMeta):
         circumvent some of the IOIter functionality and do it ourselves.  We wrap this in a
         context manager so this can be abstracted away and still ensure that proper cleanup happens.
         """
+        # we have to create the scratch dir regardless of whether --dry-run is enabled
+        # because we still need to be able to figure out what's changed and what we should do
         rmtree(get_scratch_dir(), ignore_errors=True)
         os.makedirs(get_scratch_dir(), exist_ok=True)
 
@@ -151,7 +153,8 @@ class BackupStore(metaclass=ABCMeta):
                     curr_entry.base_key_pair,
                 )
             else:
-                logger.info(f'{abs_file_name} is up to date!')
+                # we don't want to flood the log with all the files that haven't changed
+                logger.debug(f'{abs_file_name} is up to date!')
 
             if new_entry and not dry_run:
                 self.manifest.insert_or_update(new_entry)
