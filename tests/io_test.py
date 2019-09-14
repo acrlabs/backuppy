@@ -4,6 +4,7 @@ from hashlib import sha256
 
 import mock
 import pytest
+from pyfakefs import fake_filesystem
 
 from backuppy.exceptions import DoubleBufferError
 from backuppy.exceptions import FileChangedException
@@ -14,6 +15,8 @@ from backuppy.io import IOIter
 
 @pytest.fixture
 def mock_io_iter(fs):
+    fake_filesystem.set_uid(1000)
+    fake_filesystem.set_gid(1000)
     yield IOIter('/foo', block_size=2)
 
 
