@@ -12,7 +12,7 @@ from backuppy.exceptions import DoubleBufferError
 from backuppy.exceptions import FileChangedException
 
 logger = colorlog.getLogger(__name__)
-BLOCK_SIZE = (1 << 16)
+BLOCK_SIZE = (1 << 32)  # 4GB block size
 O_BINARY = getattr(os, 'O_BINARY', 0x0)  # O_BINARY only available on windows
 
 

@@ -367,4 +367,5 @@ def lock_manifest(
     if options['use_encryption']:
         with IOIter(local_manifest_filename + '.key') as new_manifest_key:
             new_manifest_key.fd.write(encrypt_and_sign(key_pair + signature, private_key_filename))
+            new_manifest_key.fd.seek(0)
             save(new_manifest_key, MANIFEST_KEY_FILE.format(ts=timestamp))
