@@ -32,7 +32,7 @@ def setup_logging(log_level_str: str = 'info') -> None:
 
         handler = colorlog.StreamHandler()
         handler.setFormatter(colorlog.ColoredFormatter(
-            '%(log_color)s%(levelname)s:%(name)s:%(message)s'))
+            '%(log_color)s%(asctime)s %(levelname)s %(name)s(%(lineno)d) -- %(message)s'))
         logger = colorlog.getLogger()
         logger.addHandler(handler)
 
