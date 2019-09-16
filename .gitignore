@@ -42,3 +42,4 @@ itests/scratch
 itests/restore
 e2e/backup
 e2e/restore
+e2e/data/big

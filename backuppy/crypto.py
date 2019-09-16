@@ -1,6 +1,10 @@
-import gzip
 import os
+import zlib
+from itertools import chain
+from itertools import repeat
 from typing import Callable
+from typing import Generator
+from typing import Tuple
 
 import colorlog
 from cryptography.exceptions import InvalidSignature
@@ -19,15 +23,13 @@ from backuppy.io import IOIter
 from backuppy.options import OptionsDict
 
 logger = colorlog.getLogger(__name__)
-GZIP_START = b'\x1f\x8b'
 AES_KEY_SIZE = 32    # 256 bits
 AES_BLOCK_SIZE = 16  # 128 bits
 RSA_KEY_SIZE = 512   # 4096 bits
 RSA_KEY_SIZE_BITS = RSA_KEY_SIZE * 8
 
 
-def identity(x: bytes, y: int = 0) -> bytes:
-    # y is to maintain typing compatibility with gzip.compress
+def identity(x: bytes) -> bytes:
     return x
 
 
@@ -44,17 +46,24 @@ def compress_and_encrypt(
     :param output_file: an IOIter object to write compressed ciphertext to
     """
     key, nonce = key_pair[:AES_KEY_SIZE], key_pair[AES_KEY_SIZE:]
-    zip_fn: Callable[[bytes], bytes] = gzip.compress if options['use_compression'] else identity
+    compressobj = zlib.compressobj()
+    zip_fn: Callable[[bytes], bytes] = (  # type: ignore
+        compressobj.compress if options['use_compression'] else identity
+    )
     encrypt_fn: Callable[[bytes], bytes] = (
         Cipher(AES(key), CTR(nonce), backend=default_backend()).encryptor().update
         if options['use_encryption'] else identity
     )
     hmac = HMAC(key, SHA256(), default_backend())
 
+    def last_block() -> Generator[Tuple[bytes, bool], None, None]:
+        yield (compressobj.flush(), False) if options['use_compression'] else (b'', False)
+
     writer = output_file.writer(); next(writer)
     logger.debug2('starting to compress')
-    for block in input_file.reader():
-        block = zip_fn(block)
+    for block, needs_compression in chain(zip(input_file.reader(), repeat(True)), last_block()):
+        if needs_compression:
+            block = zip_fn(block)
         logger.debug2(f'zip_fn returned {len(block)} bytes')
         block = encrypt_fn(block)
         logger.debug2(f'encrypt_fn returned {len(block)} bytes')
@@ -90,32 +99,27 @@ def decrypt_and_unpack(
         Cipher(AES(key), CTR(nonce), backend=default_backend()).decryptor().update
         if options['use_encryption'] else identity
     )
+    decompress_obj = zlib.decompressobj()
+    unzip_fn: Callable[[bytes], bytes] = (  # type: ignore
+        decompress_obj.decompress
+        if options['use_compression'] else identity
+    )
     hmac = HMAC(key, SHA256(), default_backend())
     writer = output_file.writer(); next(writer)
-    for block in input_file.reader():
+    for encrypted_data in input_file.reader():
         if options['use_encryption']:
-            hmac.update(block)
-        decrypted_data += decrypt_fn(block)
+            hmac.update(encrypted_data)
+        decrypted_data += decrypt_fn(encrypted_data)
         logger.debug2(f'decrypt_fn returned {len(decrypted_data)} bytes')
 
-        # gzip.decompress throws an EOFError if we pass in partial data, so here we need to
-        # decompress each GZIP'ed member individually; to find a complete member we look for
-        # the start of the next GZIP blob, which starts with a known constant byte-pair
-        if options['use_compression']:
-            index = decrypted_data.find(GZIP_START, 2)
-            if index != -1:
-                block = gzip.decompress(decrypted_data[:index])
-                logger.debug2(f'unzip_fn returned {len(block)} bytes')
-                writer.send(block)
-                decrypted_data = decrypted_data[index:]
-        else:
-            logger.debug2(f'unzip_fn returned {len(decrypted_data)} bytes')
-            writer.send(decrypted_data)
-            decrypted_data = b''
+        block = unzip_fn(decrypted_data)
+        logger.debug2(f'unzip_fn returned {len(block)} bytes')
+        writer.send(block)
+        decrypted_data = decompress_obj.unused_data
 
     # Decompress and write out the last block
     if decrypted_data:
-        block = gzip.decompress(decrypted_data) if options['use_compression'] else decrypted_data
+        block = unzip_fn(decrypted_data)
         logger.debug2(f'unzip_fn returned {len(block)} bytes')
         writer.send(block)
 
