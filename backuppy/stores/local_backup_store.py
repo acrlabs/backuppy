@@ -44,12 +44,34 @@ class LocalBackupStore(BackupStore):
         return output_file
 
     def _query(self, prefix: str) -> List[str]:
+        # self_rel_name returns things with a leading slash, but we don't necessary want to
+        # require that for every possible prefix, so we add it here if it wasn't already present
+        if prefix and prefix[0] != '/':
+            prefix = '/' + prefix
         results: List[str] = []
+
         for root, dirs, files in os.walk(self.backup_location):
+            # look through all of the directories and see if any of them match the prefix;
+            # if they don't match here, there's no reason to recurse into them, so just pop
+            # them off (we have to modify dirs in-place here).  We start at the end for "efficiency"
+            index = -1
+            while index >= -len(dirs):
+                rel_dir = self._rel_name(root, dirs[index])
+                cmp_len = min(len(prefix), len(rel_dir))
+                if prefix[:cmp_len] != rel_dir[:cmp_len]:
+                    dirs.pop(index)
+                else:
+                    index -= 1
+
+            # now add any files that match the query
             for f in files:
-                if f.startswith(prefix):
-                    results += [path_join(root[len(self.backup_location):], f)]
+                rel_f = self._rel_name(root, f)
+                if rel_f.startswith(prefix):
+                    results += [rel_f]
         return results
 
     def _delete(self, filename: str) -> None:
         os.remove(path_join(self.backup_location, filename))
+
+    def _rel_name(self, root: str, filename: str) -> str:
+        return path_join(root[len(self.backup_location):], filename)

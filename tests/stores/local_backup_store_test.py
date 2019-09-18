@@ -25,6 +25,7 @@ def fake_filesystem(fs):
     fs.create_file('/scratch/asdf/bar', contents="i'm a copy of bar")
     fs.create_file('/fake/path/fake_backup/foo', contents='old boring content')
     fs.create_file('/fake/path/fake_backup/biz/baz', contents='old boring content 2')
+    fs.create_file('/fake/path/fake_backup/fuzz/buzz', contents='old boring content 3')
 
 
 def fake_output_func(content, tmp, loc, key, iv):
@@ -52,7 +53,11 @@ def test_load(mock_backup_store):
 
 
 def test_query(mock_backup_store):
-    assert set(mock_backup_store._query('')) == {'/biz/baz', '/foo'}
+    assert set(mock_backup_store._query('')) == {'/biz/baz', '/foo', '/fuzz/buzz'}
+
+
+def test_query_2(mock_backup_store):
+    assert set(mock_backup_store._query('f')) == {'/foo', '/fuzz/buzz'}
 
 
 def test_query_no_results(mock_backup_store):
