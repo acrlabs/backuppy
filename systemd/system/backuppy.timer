@@ -1,0 +1,10 @@
+[Unit]
+Description=Python-based incremental backup service
+After=network.target
+
+[Timer]
+OnBootSec=15min
+OnUnitActiveSec=1h
+
+[Install]
+WantedBy=timers.target

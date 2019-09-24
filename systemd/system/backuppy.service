@@ -1,0 +1,4 @@
+[Service]
+ExecStart=/usr/local/bin/backuppy --log-level debug --config /backup/backup.conf backup
+PrivateTmp=True
+Nice=10
