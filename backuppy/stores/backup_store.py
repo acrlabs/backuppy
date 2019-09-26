@@ -3,6 +3,7 @@ import time
 from abc import ABCMeta
 from abc import abstractmethod
 from contextlib import contextmanager
+from enum import Enum
 from shutil import rmtree
 from typing import Iterator
 from typing import List
@@ -35,6 +36,19 @@ from backuppy.util import regex_search_list
 from backuppy.util import sha_to_path
 
 logger = colorlog.getLogger(__name__)
+
+
+class LoadAction(Enum):
+    Fetch = 'fetch'
+    Decrypt = 'decrypt'
+    Unpack = 'unpack'
+
+    @staticmethod
+    def parse(s: str) -> 'LoadAction':
+        try:
+            return LoadAction[s.capitalize()]
+        except KeyError:
+            raise ValueError()
 
 
 class BackupStore(metaclass=ABCMeta):
@@ -177,13 +191,25 @@ class BackupStore(metaclass=ABCMeta):
             self._save(encrypted_save_file, dest)  # test_f1_crash_file_save
         return signature
 
-    def load(self, src: str, dest: IOIter, key_pair: bytes) -> IOIter:
+    def load(
+        self,
+        src: str,
+        dest: IOIter,
+        key_pair: bytes,
+        load_action: LoadAction = LoadAction.Unpack,
+        no_verify: bool = False,
+    ) -> IOIter:
         """ Wrapper around the _load function that converts the SHA to a path """
         src = sha_to_path(src)
 
         with IOIter() as encrypted_load_file:
+            options = self.options
+            if load_action != LoadAction.Unpack:
+                options['use_compression'] = False
+            if load_action == LoadAction.Fetch:
+                options['use_encryption'] = False
             self._load(src, encrypted_load_file)
-            decrypt_and_unpack(encrypted_load_file, dest, key_pair, self.options)
+            decrypt_and_unpack(encrypted_load_file, dest, key_pair, options, no_verify)
         dest.fd.seek(0)
         return dest
 

@@ -11,10 +11,12 @@ from tabulate import tabulate
 from backuppy.args import add_preserve_scratch_arg
 from backuppy.args import subparser
 from backuppy.blob import apply_diff
+from backuppy.io import io_copy
 from backuppy.io import IOIter
 from backuppy.manifest import ManifestEntry
 from backuppy.stores import get_backup_store
 from backuppy.stores.backup_store import BackupStore
+from backuppy.stores.backup_store import LoadAction
 from backuppy.util import ask_for_confirmation
 from backuppy.util import format_sha
 from backuppy.util import format_time
@@ -64,6 +66,8 @@ def _restore(
     files_to_restore: List[ManifestEntry],
     destination: str,
     backup_store: BackupStore,
+    restore_action: LoadAction,
+    no_verify: bool,
 ) -> None:
     print('Beginning restore...')
     os.makedirs(destination, exist_ok=True)
@@ -76,11 +80,17 @@ def _restore(
 
             if f.base_sha:
                 assert f.base_key_pair  # make mypy happy; this cannot be None here
-                backup_store.load(f.base_sha, orig_file, f.base_key_pair)
-                backup_store.load(f.sha, diff_file, f.key_pair)
-                apply_diff(orig_file, diff_file, restore_file)
+                backup_store.load(f.base_sha, orig_file, f.base_key_pair, restore_action, no_verify)
+                backup_store.load(f.sha, diff_file, f.key_pair, restore_action, no_verify)
+                if restore_action == LoadAction.Unpack:
+                    import pdb; pdb.set_trace()
+                    apply_diff(orig_file, diff_file, restore_file)
+                else:
+                    io_copy(diff_file, restore_file)
+                    with IOIter(f'{restore_file_name}.base') as restore_file_base:
+                        io_copy(orig_file, restore_file_base)
             else:
-                backup_store.load(f.sha, restore_file, f.key_pair)
+                backup_store.load(f.sha, restore_file, f.key_pair, restore_action, no_verify)
     print('Restore complete!\n')
 
 
@@ -111,7 +121,13 @@ def main(args: argparse.Namespace) -> None:
             files_to_restore = [h[-1] for _, h in search_results if h[-1].sha]
 
         if _confirm_restore(files_to_restore, destination, destination_str):
-            _restore(files_to_restore, destination, backup_store)
+            _restore(
+                files_to_restore,
+                destination,
+                backup_store,
+                args.restore_action,
+                args.no_verify,
+            )
 
 
 @subparser('restore', 'restore files from a backup set', main)
@@ -146,5 +162,17 @@ def add_restore_parser(subparser) -> None:  # pragma: no cover
         '-y', '--yes',
         action='store_true',
         help='Answer yes to all prompts',
+    )
+    subparser.add_argument(
+        '--restore-action',
+        choices=list(LoadAction),
+        default='unpack',
+        help='Action to take on the restored data',
+        type=LoadAction.parse,
+    )
+    subparser.add_argument(
+        '--no-verify',
+        action='store_true',
+        help='Do not verify the encrypted file\'s contents',
     )
     add_preserve_scratch_arg(subparser)

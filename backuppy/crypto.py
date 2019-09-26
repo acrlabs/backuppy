@@ -82,6 +82,7 @@ def decrypt_and_unpack(
     output_file: IOIter,
     key_pair: bytes,
     options: OptionsDict,
+    no_verify: bool = False,
 ) -> None:
     """ Read encrypted, GZIPed data from an open file descriptor, and write the decoded data to
     another file descriptor; verify the HMAC of the encrypted data to ensure integrity
@@ -124,7 +125,7 @@ def decrypt_and_unpack(
         writer.send(block)
 
     try:
-        if options['use_encryption']:
+        if options['use_encryption'] and not no_verify:
             hmac.verify(signature)
     except InvalidSignature as e:
         raise BackupCorruptedError("The file's signature did not match the data") from e
