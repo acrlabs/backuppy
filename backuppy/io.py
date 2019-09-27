@@ -48,7 +48,9 @@ class IOIter:
         if self._fd:
             raise DoubleBufferError(f'Buffer for {self.filename} is open twice')
         if self.filename:
-            os.makedirs(os.path.dirname(self.filename), exist_ok=True)
+            dirname = os.path.dirname(self.filename)
+            if dirname:
+                os.makedirs(dirname, exist_ok=True)
             fd = os.open(self.filename, os.O_CREAT | os.O_RDWR | O_BINARY, mode=0o600)
             self._fd = os.fdopen(fd, 'r+b')
             self._enter_mtime = self.mtime

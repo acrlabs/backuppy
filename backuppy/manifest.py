@@ -294,6 +294,20 @@ class Manifest:
         self._commit()
 
 
+def get_manifest_keypair(
+    manifest_filename: str,
+    private_key_filename: str,
+    load: Callable[[str, IOIter], IOIter],
+) -> bytes:
+    ts = manifest_filename.split('.', 1)[1]
+    with IOIter() as manifest_key:
+        # the key is not large enough to worry about chunked reads, so just do it all at once
+        load(MANIFEST_KEY_FILE.format(ts=ts), manifest_key)
+        manifest_key.fd.seek(0)
+        encrypted_key_pair = manifest_key.fd.read()
+    return decrypt_and_verify(encrypted_key_pair, private_key_filename)
+
+
 def unlock_manifest(
     manifest_filename: str,
     private_key_filename: str,
@@ -315,13 +329,7 @@ def unlock_manifest(
     # First use the private key to read the AES key and nonce used to encrypt the manifest
     key_pair = b''
     if options['use_encryption']:
-        with IOIter() as manifest_key:
-            ts = manifest_filename.split('.', 1)[1]
-            load(MANIFEST_KEY_FILE.format(ts=ts), manifest_key)
-            # the key is not large enough to worry about chunked reads, so just do it all at once
-            manifest_key.fd.seek(0)
-            encrypted_key_pair = manifest_key.fd.read()
-        key_pair = decrypt_and_verify(encrypted_key_pair, private_key_filename)
+        key_pair = get_manifest_keypair(manifest_filename, private_key_filename, load)
 
     # Now use the key and nonce to decrypt the manifest
     with IOIter() as encrypted_local_manifest, \

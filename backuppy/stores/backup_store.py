@@ -177,10 +177,14 @@ class BackupStore(metaclass=ABCMeta):
             self._save(encrypted_save_file, dest)  # test_f1_crash_file_save
         return signature
 
-    def load(self, src: str, dest: IOIter, key_pair: bytes) -> IOIter:
+    def load(
+        self,
+        src: str,
+        dest: IOIter,
+        key_pair: bytes,
+    ) -> IOIter:
         """ Wrapper around the _load function that converts the SHA to a path """
         src = sha_to_path(src)
-
         with IOIter() as encrypted_load_file:
             self._load(src, encrypted_load_file)
             decrypt_and_unpack(encrypted_load_file, dest, key_pair, self.options)
