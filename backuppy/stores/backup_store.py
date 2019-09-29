@@ -112,7 +112,7 @@ class BackupStore(metaclass=ABCMeta):
                 rmtree(get_scratch_dir(), ignore_errors=True)
             self._manifest = None  # test_m1_crash_after_save
 
-    def save_if_new(self, abs_file_name: str, dry_run: bool) -> None:
+    def save_if_new(self, abs_file_name: str, dry_run: bool = False) -> None:
         """ The main workhorse function; determine if a file has changed, and if so, back it up!
 
         :param abs_file_name: the name of the file under consideration

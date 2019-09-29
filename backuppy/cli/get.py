@@ -59,6 +59,8 @@ def main(args: argparse.Namespace) -> None:
             # the first one
             filename, key_pair = entries[0].sha, entries[0].key_pair
         else:
+            # Retrieve the manifest instead of a specific file; we don't call unlock_manifest
+            # here so that we can have control over the action
             filename = sorted(backup_store._query(MANIFEST_PREFIX), reverse=True)[args.manifest][1:]
             private_key_filename = backup_store.config.read('private_key_filename', default='')
             key_pair = get_manifest_keypair(filename, private_key_filename, backup_store._load)
