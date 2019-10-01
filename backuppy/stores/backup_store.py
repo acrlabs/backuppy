@@ -58,7 +58,7 @@ class BackupStore(metaclass=ABCMeta):
         self._manifest = None
 
     @contextmanager
-    def unlock(self, dry_run=False, preserve_scratch=False) -> Iterator:
+    def unlock(self, *, dry_run=False, preserve_scratch=False) -> Iterator:
         """
         Unlock the backup store and prep for work
 

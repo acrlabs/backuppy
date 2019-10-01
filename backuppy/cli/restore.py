@@ -94,7 +94,7 @@ def main(args: argparse.Namespace) -> None:
     staticconf.DictConfiguration(backup_set_config, namespace=args.name)
     backup_store = get_backup_store(args.name)
 
-    with backup_store.unlock(args.preserve_scratch_dir):
+    with backup_store.unlock(preserve_scratch=args.preserve_scratch_dir):
         files_to_restore: List[ManifestEntry]
         if args.sha:
             files_to_restore = backup_store.manifest.get_entries_by_sha(args.sha)

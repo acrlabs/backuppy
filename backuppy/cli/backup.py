@@ -65,7 +65,7 @@ def main(args: argparse.Namespace) -> None:
         logger.info(f'Starting backup for {backup_name}')
         backup_store = get_backup_store(backup_name)
 
-        with backup_store.unlock(args.dry_run, args.preserve_scratch_dir):
+        with backup_store.unlock(dry_run=args.dry_run, preserve_scratch=args.preserve_scratch_dir):
             marked_files: Set[str] = set()
             for base_path in staticconf.read_list('directories', namespace=backup_name):
                 abs_base_path = os.path.abspath(base_path)
