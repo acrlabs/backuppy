@@ -120,11 +120,38 @@ class BackupStore(metaclass=ABCMeta):
         curr_entry, new_entry = self.manifest.get_entry(abs_file_name), None
         with IOIter(abs_file_name) as new_file:
             new_sha = compute_sha(new_file)
+            other_entries = [
+                e for e in self.manifest.get_entries_by_sha(new_sha)
+                if e.abs_file_name != abs_file_name
+            ]
+
+            # If the SHA already exists in the manifest, then we don't overwrite the file, we
+            # just re-use the existing data (this is safe because the data has not changed)
+            #
+            # NOTE: this is fundamentally different from the check below which looks to see if the
+            # _same_ file has just changed modes; here we're checking for the existence of a SHA
+            # in the backup store, below we're checking for the existence of a file in the file
+            # system.  The fact that they use very similar bits of logic means it's tempting to
+            # try to DRY the code here, but we deliberately don't do this.  I think it's more
+            # likely to lead to subtle, hard-to-reason-about bugs because of the difference in
+            # intent.
+            if other_entries:
+                logger.info(f'{abs_file_name} matches data already in the store, using that entry')
+                new_entry = ManifestEntry(
+                    abs_file_name,
+                    other_entries[0].sha,
+                    other_entries[0].base_sha,
+                    new_file.uid,
+                    new_file.gid,
+                    new_file.mode,
+                    other_entries[0].key_pair,
+                    other_entries[0].base_key_pair,
+                )
 
             # If the file hasn't been backed up before, or if it's been deleted previously, save a
             # new copy; we make a copy here to ensure that the contents don't change while backing
             # the file up, and that we have the correct sha
-            if not curr_entry or not curr_entry.sha:
+            elif not curr_entry or not curr_entry.sha:
                 new_entry = self._write_copy(abs_file_name, new_file, dry_run)
 
             # If the file has been backed up, check to see if it's changed by comparing shas

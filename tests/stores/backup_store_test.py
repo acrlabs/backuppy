@@ -51,7 +51,7 @@ def backup_store():
         mock_io_iter.return_value.__enter__.return_value.gid = 1000
         mock_io_iter.return_value.__enter__.return_value.mode = 12345
         store = DummyBackupStore(backup_name)
-        store._manifest = mock.Mock()
+        store._manifest = mock.Mock(get_entries_by_sha=mock.Mock(return_value=[]))
         yield store
 
 
@@ -91,56 +91,64 @@ def test_open_locked_manifest(backup_store):
 
 
 @pytest.mark.parametrize('dry_run', [True, False])
-def test_save_if_new_with_new_file(backup_store, dry_run):
-    backup_store.manifest.get_entry.return_value = None
-    backup_store._write_copy = mock.Mock()
-    backup_store._write_diff = mock.Mock()
-    with mock.patch('backuppy.stores.backup_store.compute_sha', return_value=None):
-        backup_store.save_if_new('/foo', dry_run)
-    assert backup_store._write_copy.call_count == 1
-    assert backup_store._write_diff.call_count == 0
-    assert backup_store.manifest.insert_or_update.call_count == int(not dry_run)
+class TestSaveIfNew:
+    @pytest.fixture(autouse=True)
+    def setup_store(self, backup_store):
+        backup_store._write_copy = mock.Mock()
+        backup_store._write_diff = mock.Mock()
 
+    def test_save_if_new_same_sha_different_file(self, backup_store, dry_run):
+        entry = mock.Mock(abs_file_name='/foo', sha='abcdef123')
+        other_entry = mock.Mock(
+            abs_file_name='/foo_copy',
+            sha='abcdef123',
+            base_sha='ffffff123',
+            key_pair=b'secret_key',
+            base_key_pair=b'base_secret_key',
+        )
+        backup_store.manifest.get_entries_by_sha.return_value = [entry, other_entry]
+        with mock.patch('backuppy.stores.backup_store.compute_sha', return_value='abcdef123'):
+            backup_store.save_if_new('/foo', dry_run)
+        assert backup_store._write_copy.call_count == 0
+        assert backup_store._write_diff.call_count == 0
+        assert backup_store.manifest.insert_or_update.call_count == int(not dry_run)
 
-@pytest.mark.parametrize('dry_run', [True, False])
-def test_save_if_new_sha_different(backup_store, dry_run):
-    backup_store.manifest.get_entry.return_value = mock.Mock(sha='abcdef123')
-    backup_store._write_copy = mock.Mock()
-    backup_store._write_diff = mock.Mock()
-    with mock.patch('backuppy.stores.backup_store.compute_sha', return_value='321fedcba'):
-        backup_store.save_if_new('/foo', dry_run)
-    assert backup_store._write_copy.call_count == 0
-    assert backup_store._write_diff.call_count == 1
-    assert backup_store.manifest.insert_or_update.call_count == int(not dry_run)
+    def test_save_if_new_with_new_file(self, backup_store, dry_run):
+        backup_store.manifest.get_entry.return_value = None
+        with mock.patch('backuppy.stores.backup_store.compute_sha', return_value=None):
+            backup_store.save_if_new('/foo', dry_run)
+        assert backup_store._write_copy.call_count == 1
+        assert backup_store._write_diff.call_count == 0
+        assert backup_store.manifest.insert_or_update.call_count == int(not dry_run)
 
+    def test_save_if_new_sha_different(self, backup_store, dry_run):
+        backup_store.manifest.get_entry.return_value = mock.Mock(sha='abcdef123')
+        with mock.patch('backuppy.stores.backup_store.compute_sha', return_value='321fedcba'):
+            backup_store.save_if_new('/foo', dry_run)
+        assert backup_store._write_copy.call_count == 0
+        assert backup_store._write_diff.call_count == 1
+        assert backup_store.manifest.insert_or_update.call_count == int(not dry_run)
 
-@pytest.mark.parametrize('uid_changed', [True, False])
-@pytest.mark.parametrize('dry_run', [True, False])
-def test_save_if_new_sha_equal(backup_store, uid_changed, dry_run):
-    entry = mock.Mock(sha='abcdef123', uid=(2000 if uid_changed else 1000), gid=1000, mode=12345)
-    backup_store.manifest.get_entry.return_value = entry
-    backup_store._write_copy = mock.Mock()
-    backup_store._write_diff = mock.Mock()
-    with mock.patch('backuppy.stores.backup_store.compute_sha', return_value='abcdef123'):
-        backup_store.save_if_new('/foo', dry_run)
-    assert backup_store._write_copy.call_count == 0
-    assert backup_store._write_diff.call_count == 0
-    assert backup_store.manifest.insert_or_update.call_count == int(uid_changed and not dry_run)
+    @pytest.mark.parametrize('uid_changed', [True, False])
+    def test_save_if_new_sha_equal(self, backup_store, uid_changed, dry_run):
+        entry = mock.Mock(sha='abcdef123', uid=(2000 if uid_changed else 1000), gid=1000, mode=12345)
+        backup_store.manifest.get_entry.return_value = entry
+        with mock.patch('backuppy.stores.backup_store.compute_sha', return_value='abcdef123'):
+            backup_store.save_if_new('/foo', dry_run)
+        assert backup_store._write_copy.call_count == 0
+        assert backup_store._write_diff.call_count == 0
+        assert backup_store.manifest.insert_or_update.call_count == int(uid_changed and not dry_run)
 
-
-@pytest.mark.parametrize('dry_run', [True, False])
-def test_save_if_new_skip_diff(backup_store, dry_run):
-    backup_store._write_copy = mock.Mock()
-    backup_store._write_diff = mock.Mock()
-    with mock.patch('backuppy.stores.backup_store.compute_sha', return_value='321fedcba'), \
-            staticconf.testing.PatchConfiguration(
-                {'options': [{'skip_diff_patterns': ['.*oo']}]},
-                namespace='fake_backup1',
-    ):
-        backup_store.save_if_new('/foo', dry_run)
-    assert backup_store._write_copy.call_count == 1
-    assert backup_store._write_diff.call_count == 0
-    assert backup_store.manifest.insert_or_update.call_count == int(not dry_run)
+    def test_save_if_new_skip_diff(self, backup_store, dry_run):
+        with mock.patch('backuppy.stores.backup_store.compute_sha', return_value='321fedcba'), \
+                staticconf.testing.PatchConfiguration(
+                    {'options': [{'skip_diff_patterns': ['.*oo']}]},
+                    namespace='fake_backup1',
+        ):
+            backup_store.save_if_new('/foo', dry_run)
+        assert backup_store._write_copy.call_count == 1
+        assert backup_store._write_diff.call_count == 0
+        assert backup_store.manifest.insert_or_update.call_count == int(not dry_run)
 
 
 @pytest.mark.no_mocksaveload
