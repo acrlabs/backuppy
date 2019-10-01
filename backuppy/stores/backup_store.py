@@ -136,17 +136,20 @@ class BackupStore(metaclass=ABCMeta):
             # likely to lead to subtle, hard-to-reason-about bugs because of the difference in
             # intent.
             if other_entries:
-                logger.info(f'{abs_file_name} matches data already in the store, using that entry')
-                new_entry = ManifestEntry(
-                    abs_file_name,
-                    other_entries[0].sha,
-                    other_entries[0].base_sha,
-                    new_file.uid,
-                    new_file.gid,
-                    new_file.mode,
-                    other_entries[0].key_pair,
-                    other_entries[0].base_key_pair,
-                )
+
+                # if the only thing that's changed is the metadata, we can skip saving here
+                if not curr_entry or not curr_entry.sha or new_sha != curr_entry.sha:
+                    logger.info(f'{abs_file_name} matches data already present, using that entry')
+                    new_entry = ManifestEntry(
+                        abs_file_name,
+                        other_entries[0].sha,
+                        other_entries[0].base_sha,
+                        new_file.uid,
+                        new_file.gid,
+                        new_file.mode,
+                        other_entries[0].key_pair,
+                        other_entries[0].base_key_pair,
+                    )
 
             # If the file hasn't been backed up before, or if it's been deleted previously, save a
             # new copy; we make a copy here to ensure that the contents don't change while backing
