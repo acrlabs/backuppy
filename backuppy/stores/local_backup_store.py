@@ -33,7 +33,9 @@ class LocalBackupStore(BackupStore):
             )
 
         logger.info(f'Writing {src.filename} to {abs_backup_path}')  # test_f2_lbs_atomicity_1
-        shutil.move(src.filename, abs_backup_path)
+
+        # windows does not allow deleting an open FD, so we copy here and delete the original later
+        shutil.copy2(src.filename, abs_backup_path)
         return  # test_f2_lbs_atomicity_2
 
     def _load(self, path: str, output_file: IOIter) -> IOIter:

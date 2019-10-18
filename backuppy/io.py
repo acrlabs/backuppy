@@ -83,7 +83,7 @@ class IOIter:
         self._sha_fn = sha256()
         while True:
             self._check_mtime()
-            requested_read_size = self.block_size
+            requested_read_size = min(self.block_size, os.fstat(self.fd.fileno()).st_size)
             if end is not None and end - self.fd.tell() < requested_read_size:
                 requested_read_size = end - self.fd.tell()
             data = self.fd.read(requested_read_size)

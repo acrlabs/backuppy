@@ -202,9 +202,11 @@ class BackupStore(metaclass=ABCMeta):
 
         # We compress and encrypt the file on the local file system, and then pass the encrypted
         # file to the backup store to handle atomically
-        with IOIter(path_join(get_scratch_dir(), dest)) as encrypted_save_file:
+        filename = path_join(get_scratch_dir(), dest)
+        with IOIter(filename) as encrypted_save_file:
             signature = compress_and_encrypt(src, encrypted_save_file, key_pair, self.options)
             self._save(encrypted_save_file, dest)  # test_f1_crash_file_save
+        os.remove(filename)
         return signature
 
     def load(
