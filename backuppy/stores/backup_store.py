@@ -11,14 +11,13 @@ from typing import Optional
 import colorlog
 import staticconf
 
-from backuppy.blob import compute_sha_and_diff
+from backuppy.blob import compute_diff
 from backuppy.crypto import compress_and_encrypt
 from backuppy.crypto import decrypt_and_unpack
 from backuppy.crypto import generate_key_pair
 from backuppy.exceptions import DiffTooLargeException
 from backuppy.exceptions import ManifestLockedException
 from backuppy.io import compute_sha
-from backuppy.io import io_copy
 from backuppy.io import IOIter
 from backuppy.manifest import lock_manifest
 from backuppy.manifest import Manifest
@@ -155,14 +154,20 @@ class BackupStore(metaclass=ABCMeta):
             # new copy; we make a copy here to ensure that the contents don't change while backing
             # the file up, and that we have the correct sha
             elif not curr_entry or not curr_entry.sha:
-                new_entry = self._write_copy(abs_file_name, new_file, dry_run)
+                new_entry = self._write_copy(abs_file_name, new_sha, new_file, dry_run)
 
             # If the file has been backed up, check to see if it's changed by comparing shas
             elif new_sha != curr_entry.sha:
                 if regex_search_list(abs_file_name, self.options['skip_diff_patterns']):
-                    new_entry = self._write_copy(abs_file_name, new_file, dry_run)
+                    new_entry = self._write_copy(abs_file_name, new_sha, new_file, dry_run)
                 else:
-                    new_entry = self._write_diff(abs_file_name, curr_entry, new_file, dry_run)
+                    new_entry = self._write_diff(
+                        abs_file_name,
+                        new_sha,
+                        curr_entry,
+                        new_file,
+                        dry_run,
+                    )
 
             # If the sha is the same but metadata on the file has changed, we just store the updated
             # metadata
@@ -203,6 +208,7 @@ class BackupStore(metaclass=ABCMeta):
         # We compress and encrypt the file on the local file system, and then pass the encrypted
         # file to the backup store to handle atomically
         filename = path_join(get_scratch_dir(), dest)
+
         with IOIter(filename) as encrypted_save_file:
             signature = compress_and_encrypt(src, encrypted_save_file, key_pair, self.options)
             self._save(encrypted_save_file, dest)  # test_f1_crash_file_save
@@ -234,30 +240,35 @@ class BackupStore(metaclass=ABCMeta):
             self._delete(manifest)
             self._delete(MANIFEST_KEY_FILE.format(ts=ts))
 
-    def _write_copy(self, abs_file_name: str, file_obj: IOIter, dry_run: bool) -> ManifestEntry:
+    def _write_copy(
+        self,
+        abs_file_name: str,
+        new_sha: str,
+        file_obj: IOIter,
+        dry_run: bool,
+    ) -> ManifestEntry:
         logger.info(f'Saving a new copy of {abs_file_name}')
 
-        key_pair = generate_key_pair()
-        with IOIter() as file_copy:  # test_f3_file_changed_while_saving
-            new_sha = io_copy(file_obj, file_copy)  # test_m2_crash_before_file_save
-            new_entry = ManifestEntry(
-                abs_file_name,
-                new_sha,
-                None,
-                file_obj.uid,
-                file_obj.gid,
-                file_obj.mode,
-                key_pair,
-                None,
-            )
-            if not dry_run:
-                signature = self.save(file_copy, new_entry.sha, key_pair)
-                new_entry.key_pair = key_pair + signature  # append the HMAC before writing to db
+        key_pair = generate_key_pair()  # test_f3_file_changed_while_saving
+        new_entry = ManifestEntry(  # test_m2_crash_before_file_save
+            abs_file_name,
+            new_sha,
+            None,
+            file_obj.uid,
+            file_obj.gid,
+            file_obj.mode,
+            key_pair,
+            None,
+        )
+        if not dry_run:
+            signature = self.save(file_obj, new_entry.sha, key_pair)
+            new_entry.key_pair = key_pair + signature  # append the HMAC before writing to db
         return new_entry
 
     def _write_diff(
         self,
         abs_file_name: str,
+        new_sha: str,
         curr_entry: ManifestEntry,
         file_obj: IOIter,
         dry_run: bool,
@@ -279,7 +290,7 @@ class BackupStore(metaclass=ABCMeta):
         with IOIter() as orig_file, IOIter() as diff_file:
             orig_file = self.load(base_sha, orig_file, base_key_pair)
             try:
-                new_sha, fd_diff = compute_sha_and_diff(
+                fd_diff = compute_diff(
                     orig_file,
                     file_obj,
                     diff_file,
@@ -291,7 +302,7 @@ class BackupStore(metaclass=ABCMeta):
                     '(you can configure this threshold with the skip_diff_percentage option)'
                 )
                 file_obj.fd.seek(0)
-                return self._write_copy(abs_file_name, file_obj, dry_run)
+                return self._write_copy(abs_file_name, new_sha, file_obj, dry_run)
 
             new_entry = ManifestEntry(
                 abs_file_name,

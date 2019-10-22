@@ -1,4 +1,5 @@
 import _hashlib  # for typing
+import io
 import os
 from hashlib import sha256
 from tempfile import TemporaryFile
@@ -55,7 +56,7 @@ class IOIter:
             self._fd = os.fdopen(fd, 'r+b')
             self._enter_mtime = self.mtime
         else:
-            self._fd = TemporaryFile(self._mode)
+            self._fd = io.BytesIO()
         self.fd.seek(0)
         return self
 
@@ -65,35 +66,29 @@ class IOIter:
         self._fd = None
         self._enter_mtime = None
 
-    def reader(
-        self,
-        end: Optional[int] = None,
-        reset_pos: bool = True,
-    ) -> Generator[bytes, None, None]:
+    def reader(self) -> Generator[bytes, None, None]:
         """ Iterator for reading the contents of a file
 
         This generator will fail with a BufferError unless inside a with IOIter(...) block
 
-        :param end: the ending position to read until
-        :param reset_pos: True to seek to the beginning of the file first, false otherwise
         :returns: data for the file in self.block_size chunks
         """
-        if reset_pos:
-            self.fd.seek(0)
+        self.fd.seek(0)
         self._sha_fn = sha256()
         while True:
             self._check_mtime()
-            requested_read_size = min(self.block_size, os.fstat(self.fd.fileno()).st_size)
-            if end is not None and end - self.fd.tell() < requested_read_size:
-                requested_read_size = end - self.fd.tell()
+            # On Windows, even if the file is much smaller, it appears to allocate space for
+            # the full requested_read_size on a read() call, so this min(...) makes sure that
+            # we're not wasting time and memory doing that
+            requested_read_size = min(self.block_size, self.size)
+
             data = self.fd.read(requested_read_size)
             logger.debug2(f'read {len(data)} bytes from {self.filename}')
             self._sha_fn.update(data)
             if not data:
                 break
             yield data
-        if reset_pos:
-            self.fd.seek(0)
+        self.fd.seek(0)
 
     def writer(self) -> Generator[None, bytes, None]:
         """ Iterator for writing to a file; the file is truncated to 0 bytes first
@@ -102,10 +97,26 @@ class IOIter:
         """
         self.fd.truncate()
         self._sha_fn = sha256()
+        total_bytes_written = 0
         while True:
             data = yield
             self._sha_fn.update(data)
             bytes_written = self.fd.write(data)
+            total_bytes_written += bytes_written
+
+            # If we're a temporary (in-memory) file and we've exceeded our memory limits,
+            # dump the file contents out to disk before continuing
+            if (
+                not self.filename
+                and total_bytes_written >= self.block_size
+                and isinstance(self.fd, io.BytesIO)
+            ):
+                logger.debug2(f'overflowed memory limits, caching to disk')
+                temp_fd = TemporaryFile(self._mode)
+                self.fd.seek(0)
+                temp_fd.write(self.fd.read())
+                self._fd = temp_fd
+
             logger.debug2(f'wrote {bytes_written} bytes to {self.filename}')
             self.fd.flush()
 
@@ -159,6 +170,13 @@ class IOIter:
             return int(os.stat(self.filename).st_mtime)
         else:
             raise BufferError('No stat for temporary file')
+
+    @property
+    def size(self) -> int:
+        try:
+            return os.fstat(self.fd.fileno()).st_size
+        except io.UnsupportedOperation:
+            return len(self.fd.getbuffer())
 
     @property
     def fd(self):

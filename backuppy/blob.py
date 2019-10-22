@@ -1,7 +1,5 @@
-import os
 from itertools import zip_longest
 from typing import Optional
-from typing import Tuple
 
 import bsdiff4
 import colorlog
@@ -61,12 +59,12 @@ def apply_diff(orig_file: IOIter, diff_file: IOIter, new_file: IOIter) -> None:
         raise DiffParseError(f'Un-parseable diff: {diff}')
 
 
-def compute_sha_and_diff(
+def compute_diff(
     orig_file: IOIter,
     new_file: IOIter,
     diff_file: IOIter,
     discard_diff_percentage: Optional[float] = None,
-) -> Tuple[str, IOIter]:
+) -> IOIter:
     """ Given an open original file and a new file, compute the diff between the two
 
     :param orig_file: an IOIter object whose contents are the "original" data
@@ -75,7 +73,6 @@ def compute_sha_and_diff(
     """
 
     total_written = 0
-    orig_size = os.fstat(orig_file.fd.fileno()).st_size
 
     writer = diff_file.writer(); next(writer)
     logger.debug2('beginning diff computation')
@@ -83,8 +80,8 @@ def compute_sha_and_diff(
         diff = bsdiff4.diff(orig_bytes, new_bytes)
         diff_str = str(len(diff)).encode() + SEPARATOR + diff
         total_written += len(diff_str)
-        if discard_diff_percentage and total_written > orig_size * discard_diff_percentage:
+        if discard_diff_percentage and total_written > orig_file.size * discard_diff_percentage:
             raise DiffTooLargeException
         writer.send(diff_str)
 
-    return new_file.sha(), diff_file
+    return diff_file
