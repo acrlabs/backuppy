@@ -103,6 +103,7 @@ class BackupStore(metaclass=ABCMeta):
                     self._manifest,
                     self.config.read('private_key_filename', default=''),
                     self._save,
+                    self._load,
                     self.options,
                 )
                 self.rotate_manifests()

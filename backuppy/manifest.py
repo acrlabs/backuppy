@@ -344,6 +344,7 @@ def lock_manifest(
     manifest: Manifest,
     private_key_filename: str,
     save: Callable[[IOIter, str], None],
+    load: Callable[[str, IOIter], IOIter],
     options: OptionsDict,
 ) -> None:
     """ Save a manifest from local storage to the backup store
@@ -366,10 +367,11 @@ def lock_manifest(
         key_pair = generate_key_pair()
 
     # Next, use that key and nonce to encrypt and save the manifest
+    new_manifest_filename = MANIFEST_FILE.format(ts=timestamp)
     with IOIter(local_manifest_filename) as local_manifest, \
             IOIter(local_manifest_filename + '.enc') as encrypted_manifest:
         signature = compress_and_encrypt(local_manifest, encrypted_manifest, key_pair, options)
-        save(encrypted_manifest, MANIFEST_FILE.format(ts=timestamp))
+        save(encrypted_manifest, new_manifest_filename)
 
     # Finally, save the manifest key/nonce along with its HMAC using the user's private key
     if options['use_encryption']:
@@ -377,3 +379,12 @@ def lock_manifest(
             new_manifest_key.fd.write(encrypt_and_sign(key_pair + signature, private_key_filename))
             new_manifest_key.fd.seek(0)
             save(new_manifest_key, MANIFEST_KEY_FILE.format(ts=timestamp))
+
+    try:
+        unlock_manifest(new_manifest_filename, private_key_filename, load, options)
+    except Exception:
+        logger.critical(
+            'The saved manifest could not be decrypted!  '
+            'The contents of the most recent backup is inaccessible!'
+        )
+        raise

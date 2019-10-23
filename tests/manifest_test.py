@@ -265,12 +265,31 @@ def test_lock_manifest(mock_manifest, use_encryption):
     mock_save = mock.Mock()
     with mock.patch('backuppy.manifest.IOIter'), \
             mock.patch('backuppy.manifest.encrypt_and_sign') as mock_decrypt_pub_key, \
-            mock.patch('backuppy.manifest.compress_and_encrypt'):
+            mock.patch('backuppy.manifest.compress_and_encrypt'), \
+            mock.patch('backuppy.manifest.unlock_manifest'):
         lock_manifest(
             mock_manifest,
             '/path/to/private/key',
             mock_save,
+            mock.Mock(),
             options={'use_encryption': use_encryption},
         )
     assert mock_save.call_count == 1 + use_encryption
     assert mock_decrypt_pub_key.call_count == use_encryption
+
+
+def test_lock_manifest_error(mock_manifest, caplog):
+    with mock.patch('backuppy.manifest.IOIter'), \
+            mock.patch('backuppy.manifest.encrypt_and_sign'), \
+            mock.patch('backuppy.manifest.compress_and_encrypt'), \
+            mock.patch('backuppy.manifest.unlock_manifest', side_effect=Exception), \
+            pytest.raises(Exception):
+        lock_manifest(
+            mock_manifest,
+            '/path/to/private/key',
+            mock.Mock(),
+            mock.Mock(),
+            options={'use_encryption': True},
+        )
+
+    assert 'saved manifest could not be decrypted' in caplog.records[-1].message
