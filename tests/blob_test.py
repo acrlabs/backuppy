@@ -3,7 +3,7 @@ from hashlib import sha256
 import pytest
 
 from backuppy.blob import apply_diff
-from backuppy.blob import compute_sha_and_diff
+from backuppy.blob import compute_diff
 from backuppy.exceptions import DiffParseError
 from backuppy.exceptions import DiffTooLargeException
 
@@ -26,8 +26,8 @@ def test_round_trip(mock_open_streams, sha_fn):
     orig, new, diff = mock_open_streams
     new._fd.write(new_contents)
     sha_fn.update(new_contents)
-    sha, _ = compute_sha_and_diff(orig, new, diff)
-    assert sha == sha_fn.hexdigest()
+    compute_diff(orig, new, diff)
+    assert new.sha() == sha_fn.hexdigest()
 
     new._fd.seek(0)
     new._fd.write(b'')
@@ -36,9 +36,9 @@ def test_round_trip(mock_open_streams, sha_fn):
     assert new._fd.read() == new_contents
 
 
-def test_compute_sha_and_diff_with_large_diff(mock_open_streams):
+def test_compute_diff_with_large_diff(mock_open_streams):
     orig, new, diff = mock_open_streams
     new._fd.write(b'asdfasdfasdfa')
     new._fd.seek(0)
     with pytest.raises(DiffTooLargeException):
-        compute_sha_and_diff(orig, new, diff, 0.5)
+        compute_diff(orig, new, diff, 0.5)

@@ -48,8 +48,8 @@ class LocalBackupStore(BackupStore):
     def _query(self, prefix: str) -> List[str]:
         # self_rel_name returns things with a leading slash, but we don't necessary want to
         # require that for every possible prefix, so we add it here if it wasn't already present
-        if prefix and prefix[0] != '/':
-            prefix = '/' + prefix
+        if prefix and prefix[0] != os.sep:
+            prefix = os.sep + prefix
         results: List[str] = []
 
         for root, dirs, files in os.walk(self.backup_location):

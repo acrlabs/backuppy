@@ -4,7 +4,7 @@ import string
 import pytest
 
 from backuppy.blob import apply_diff
-from backuppy.blob import compute_sha_and_diff
+from backuppy.blob import compute_diff
 from backuppy.io import IOIter
 
 DATA_LEN = 100
@@ -47,7 +47,7 @@ def test_validate_diffs(orig_data, new_data):
 
         new_writer = new.writer(); next(new_writer)
         new_writer.send(new_data)
-        compute_sha_and_diff(orig, new, diff)
+        compute_diff(orig, new, diff)
         apply_diff(orig, diff, newnew)
 
         new.fd.seek(0)

@@ -155,12 +155,14 @@ class TestSaveIfNew:
 def test_save(backup_store):
     expected_path = '/tmp/backuppy/12/34/5678'
     with mock.patch('backuppy.stores.backup_store.IOIter') as mock_io_iter, \
-            mock.patch('backuppy.stores.backup_store.compress_and_encrypt') as mock_compress:
+            mock.patch('backuppy.stores.backup_store.compress_and_encrypt') as mock_compress, \
+            mock.patch('backuppy.stores.backup_store.os.remove') as mock_remove:
         backup_store.save(mock.Mock(), '12345678', b'1111')
         src = mock_io_iter.return_value.__enter__.return_value
         assert mock_compress.call_count == 1
         assert mock_io_iter.call_args[0][0] == expected_path
         assert backup_store._save.call_args == mock.call(src, '12/34/5678')
+        assert mock_remove.call_count == 1
 
 
 @pytest.mark.no_mocksaveload
@@ -193,9 +195,8 @@ def test_rotate_manifests(backup_store, max_manifest_versions):
 
 @pytest.mark.parametrize('dry_run', [True, False])
 def test_write_copy(backup_store, dry_run, caplog):
-    with mock.patch('backuppy.stores.backup_store.generate_key_pair', return_value=b'11111'), \
-            mock.patch('backuppy.stores.backup_store.io_copy', return_value='12345678'):
-        entry = backup_store._write_copy('/foo', mock.MagicMock(), dry_run)
+    with mock.patch('backuppy.stores.backup_store.generate_key_pair', return_value=b'11111'):
+        entry = backup_store._write_copy('/foo', '12345678', mock.MagicMock(), dry_run)
     assert entry.sha == '12345678'
     # no signature computed in dry-run mode
     assert entry.key_pair == b'111112222' if not dry_run else b'11111'
@@ -210,9 +211,15 @@ def test_write_diff(backup_store, current_entry, base_sha, dry_run, caplog):
     if base_sha:
         current_entry.base_key_pair = b'bbbbb3333'
     with mock.patch('backuppy.stores.backup_store.generate_key_pair', return_value=b'11111'), \
-            mock.patch('backuppy.stores.backup_store.compute_sha_and_diff') as mock_sha_diff:
-        mock_sha_diff.return_value = ('12345678', mock.Mock())
-        entry = backup_store._write_diff('/foo', current_entry, mock.MagicMock(), dry_run)
+            mock.patch('backuppy.stores.backup_store.compute_diff') as mock_compute_diff:
+        mock_compute_diff.return_value = ('12345678', mock.Mock())
+        entry = backup_store._write_diff(
+            '/foo',
+            '12345678',
+            current_entry,
+            mock.MagicMock(),
+            dry_run,
+        )
     assert entry.sha == '12345678'
     assert entry.base_sha == ('321fedcba' if base_sha else 'abcdef123')
     # no signature computed in dry-run mode
@@ -225,10 +232,15 @@ def test_write_diff(backup_store, current_entry, base_sha, dry_run, caplog):
 @pytest.mark.parametrize('dry_run', [True, False])
 def test_write_diff_too_big(backup_store, current_entry, dry_run, caplog):
     with mock.patch('backuppy.stores.backup_store.generate_key_pair', return_value=b'11111'), \
-            mock.patch('backuppy.stores.backup_store.compute_sha_and_diff') as mock_sha_diff, \
-            mock.patch('backuppy.stores.backup_store.io_copy', return_value='12345678'):
-        mock_sha_diff.side_effect = DiffTooLargeException
-        entry = backup_store._write_diff('/foo', current_entry, mock.MagicMock(), dry_run)
+            mock.patch('backuppy.stores.backup_store.compute_diff') as mock_compute_diff:
+        mock_compute_diff.side_effect = DiffTooLargeException
+        entry = backup_store._write_diff(
+            '/foo',
+            '12345678',
+            current_entry,
+            mock.MagicMock(),
+            dry_run,
+        )
     assert entry.sha == '12345678'
     assert entry.base_sha is None
     # no signature computed in dry-run mode

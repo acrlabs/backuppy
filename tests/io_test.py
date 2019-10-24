@@ -1,6 +1,7 @@
 import os
 import time
 from hashlib import sha256
+from tempfile import TemporaryFile
 
 import mock
 import pytest
@@ -29,9 +30,9 @@ def foo_contents(fs):
 
 
 def test_tmp_io_iter(fs):
-    with mock.patch('backuppy.io.TemporaryFile') as mock_tmp_file, IOIter() as tmp:
+    with mock.patch('backuppy.io.io.BytesIO') as mock_bytes_io, IOIter() as tmp:
         tmp._check_mtime()
-        assert mock_tmp_file.call_count == 1
+        assert mock_bytes_io.call_count == 1
         with pytest.raises(BufferError):
             tmp.uid
         with pytest.raises(BufferError):
@@ -58,20 +59,15 @@ def test_reader_not_open(mock_io_iter):
         next(mock_io_iter.reader())
 
 
-@pytest.mark.parametrize('reset_pos', [True, False])
-@pytest.mark.parametrize('end', [None, 5])
-def test_reader_contents(mock_io_iter, foo_contents, reset_pos, end):
+def test_reader_contents(mock_io_iter, foo_contents):
     with mock_io_iter:
-        for i, data in enumerate(mock_io_iter.reader(end=end, reset_pos=reset_pos)):
+        for i, data in enumerate(mock_io_iter.reader()):
             start_pos = i * 2
             end_pos = start_pos + 2
-            if end and end_pos > end:
-                end_pos = end
             assert data == foo_contents[start_pos:end_pos]
-        remainder = len(foo_contents) - (end if end else len(foo_contents))
-        assert len(mock_io_iter.fd.read()) == (len(foo_contents) if reset_pos else remainder)
+        assert len(mock_io_iter.fd.read()) == len(foo_contents)
         sha_fn = sha256()
-        sha_fn.update(foo_contents[:(end if end else len(foo_contents))])
+        sha_fn.update(foo_contents[:len(foo_contents)])
         assert mock_io_iter.sha() == sha_fn.hexdigest()
 
 
@@ -92,6 +88,18 @@ def test_writer(mock_io_iter):
     sha_fn = sha256()
     sha_fn.update(contents)
     assert mock_io_iter.sha() == sha_fn.hexdigest()
+
+
+@pytest.mark.parametrize('block_size', [2, 100])
+def test_writer_tmp_file(block_size):
+    contents = b'asdfhjlkqwerty'
+    with IOIter(None, block_size=block_size) as tmp, \
+            mock.patch('backuppy.io.TemporaryFile', wraps=TemporaryFile) as mock_tmp_file:
+        writer = tmp.writer(); next(writer)
+        writer.send(contents)
+        tmp.fd.seek(0)
+        assert tmp.fd.read() == contents
+        assert mock_tmp_file.call_count == (len(contents) > block_size)
 
 
 def test_no_sha_computed(mock_io_iter):

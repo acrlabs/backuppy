@@ -82,7 +82,7 @@ def parse_time(input_str: str) -> int:
 
 
 def path_join(*args):
-    return os.path.normpath('/'.join(args))
+    return os.path.normpath(os.sep.join(args))
 
 
 def sha_to_path(sha: str) -> str:
