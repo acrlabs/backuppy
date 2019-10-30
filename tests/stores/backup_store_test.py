@@ -1,4 +1,5 @@
 import os
+import signal
 
 import mock
 import pytest
@@ -9,7 +10,6 @@ from backuppy.exceptions import ManifestLockedException
 from backuppy.manifest import ManifestEntry
 from backuppy.stores.backup_store import BackupStore
 from backuppy.util import get_scratch_dir
-from tests.conftest import count_matching_log_lines
 
 
 @pytest.fixture(autouse=True)
@@ -59,29 +59,46 @@ def test_init(backup_store):
     assert backup_store.backup_name == 'fake_backup1'
 
 
-@pytest.mark.parametrize('manifest_changed', [True, False])
 @pytest.mark.parametrize('manifest_exists', [True, False])
-def test_unlock(fs, caplog, backup_store, manifest_changed, manifest_exists):
+def test_unlock(fs, backup_store, manifest_exists):
     os.makedirs(get_scratch_dir())
     with mock.patch('backuppy.stores.backup_store.Manifest') as mock_manifest, \
             mock.patch('backuppy.stores.backup_store.unlock_manifest') as mock_unlock_manifest, \
-            mock.patch('backuppy.stores.backup_store.lock_manifest') as mock_lock_manifest, \
             mock.patch('backuppy.stores.backup_store.rmtree') as mock_remove:
-        mock_manifest.return_value.changed = manifest_changed
+        backup_store._do_cleanup = mock.Mock()
         mock_unlock_manifest.return_value = mock_manifest.return_value
         if manifest_exists:
             backup_store._query.return_value = ['manifest.1234123']
-        backup_store.rotate_manifests = mock.Mock()
         with backup_store.unlock():
             pass
         assert mock_unlock_manifest.call_count == manifest_exists
-        assert mock_remove.call_count == 2
-        assert count_matching_log_lines(
-            'No changes detected; nothing to do',
-            caplog,
-        ) == 1 - manifest_changed
-        assert mock_lock_manifest.call_count == manifest_changed
-        assert backup_store._manifest is None
+        assert mock_remove.call_count == 1
+        assert backup_store._do_cleanup.call_args == mock.call(
+            None,
+            None,
+            dry_run=False,
+            preserve_scratch=False,
+        )
+
+
+def test_unlock_signal(fs, backup_store):
+    os.makedirs(get_scratch_dir())
+    with mock.patch('backuppy.stores.backup_store.Manifest'), \
+            mock.patch('backuppy.stores.backup_store.unlock_manifest'), \
+            mock.patch('backuppy.stores.backup_store.rmtree'):
+        backup_store._do_cleanup = mock.Mock()
+        with backup_store.unlock():
+            os.kill(os.getpid(), signal.SIGINT)
+
+        # This is a little wonky; since we've mocked out _do_cleanup, it won't exit the program
+        # which means we actually call it twice.  So here we just check to make sure the _first_
+        # time we call it is correct, since the second time "won't happen"
+        assert backup_store._do_cleanup.call_args_list[0] == mock.call(
+            signal.SIGINT,
+            mock.ANY,
+            dry_run=False,
+            preserve_scratch=False,
+        )
 
 
 def test_open_locked_manifest(backup_store):
@@ -191,6 +208,31 @@ def test_rotate_manifests(backup_store, max_manifest_versions):
             mock.call('manifest.1234'),
             mock.call('manifest-key.1234'),
         ]
+
+
+@pytest.mark.parametrize('dry_run', [True, False])
+@pytest.mark.parametrize('preserve_scratch', [True, False])
+@pytest.mark.parametrize('manifest', [None, mock.Mock(changed=True), mock.Mock(changed=False)])
+@pytest.mark.parametrize('signal', [(None, None), (signal.SIGINT, mock.Mock())])
+def test_do_cleanup(fs, backup_store, manifest, signal, dry_run, preserve_scratch):
+    with mock.patch('backuppy.stores.backup_store.rmtree') as mock_remove, \
+            mock.patch('backuppy.stores.backup_store.lock_manifest') as mock_lock, \
+            mock.patch('backuppy.stores.backup_store.sys.exit') as mock_exit:
+        backup_store._manifest = manifest
+        backup_store.rotate_manifests = mock.Mock()
+        backup_store._do_cleanup(
+            signal[0],
+            signal[1],
+            dry_run=dry_run,
+            preserve_scratch=preserve_scratch
+        )
+        assert mock_lock.call_count == int(bool(manifest and manifest.changed and not dry_run))
+        assert backup_store.rotate_manifests.call_count == int(bool(
+            manifest and manifest.changed and not dry_run
+        ))
+        assert mock_remove.call_count == int(bool(manifest and not preserve_scratch))
+        assert backup_store._manifest is None
+        assert mock_exit.call_count == int(bool(manifest and signal[0]))
 
 
 @pytest.mark.parametrize('dry_run', [True, False])
