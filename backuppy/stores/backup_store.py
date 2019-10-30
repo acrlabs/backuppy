@@ -1,9 +1,13 @@
 import os
+import signal
+import sys
 import time
 from abc import ABCMeta
 from abc import abstractmethod
 from contextlib import contextmanager
+from functools import partial
 from shutil import rmtree
+from types import FrameType
 from typing import Iterator
 from typing import List
 from typing import Optional
@@ -65,6 +69,10 @@ class BackupStore(metaclass=ABCMeta):
         sqlite3 doesn't accept an open file descriptor when opening a DB connection, we have to
         circumvent some of the IOIter functionality and do it ourselves.  We wrap this in a
         context manager so this can be abstracted away and still ensure that proper cleanup happens.
+
+        :param dry_run: whether to actually save any data or not
+        :param preserve_scratch: whether to clean up the scratch directory before we exit; mainly
+            used for debugging purposes
         """
         # we have to create the scratch dir regardless of whether --dry-run is enabled
         # because we still need to be able to figure out what's changed and what we should do
@@ -94,28 +102,26 @@ class BackupStore(metaclass=ABCMeta):
                     self.options,
                 )
 
+            # Safely clean up after Ctrl-C or SIGTERM; this minimizes the amount of duplicate
+            # work we have to do in the event that we cancel the backup partway through
+            sig_handler = partial(
+                self._do_cleanup,
+                dry_run=dry_run,
+                preserve_scratch=preserve_scratch
+            )
+            for sig in (signal.SIGINT, signal.SIGTERM):
+                signal.signal(sig, sig_handler)
+
             yield
 
-            if not self._manifest.changed:  # test_m1_crash_before_save
-                logger.info('No changes detected; nothing to do')
-            elif not dry_run:
-                lock_manifest(
-                    self._manifest,
-                    self.config.read('private_key_filename', default=''),
-                    self._save,
-                    self._load,
-                    self.options,
-                )
-                self.rotate_manifests()
         finally:
-            if not preserve_scratch:
-                rmtree(get_scratch_dir(), ignore_errors=True)
-            self._manifest = None  # test_m1_crash_after_save
+            self._do_cleanup(None, None, dry_run=dry_run, preserve_scratch=preserve_scratch)
 
     def save_if_new(self, abs_file_name: str, dry_run: bool = False) -> None:
         """ The main workhorse function; determine if a file has changed, and if so, back it up!
 
         :param abs_file_name: the name of the file under consideration
+        :param dry_run: whether to actually save any data or not
         """
         curr_entry, new_entry = self.manifest.get_entry(abs_file_name), None
         with IOIter(abs_file_name) as new_file:
@@ -240,6 +246,54 @@ class BackupStore(metaclass=ABCMeta):
             ts = manifest.split('.', 1)[1]
             self._delete(manifest)
             self._delete(MANIFEST_KEY_FILE.format(ts=ts))
+
+    def _do_cleanup(
+        self,
+        signum: Optional[int],
+        frame: Optional[FrameType],
+        *,
+        dry_run: bool,
+        preserve_scratch: bool,
+    ) -> None:
+        """ Ensure that the backup store gets cleaned up appropriately before we shut down; this
+        can be called as a signal handler, hence the first two arguments.  Otherwise this should
+        be called whenever we lock the store.
+
+        :param signum: if called as a signal handler, the signal num; otherwise None
+        :param frame: if called as a signal handler, the stack trace; otherwise None
+        :param dry_run: whether to actually save any data or not
+        :param preserve_scratch: whether to clean up the scratch directory before we exit; mainly
+            used for debugging purposes
+        """
+        if not self._manifest:
+            return
+
+        if signum:
+            signal.signal(signum, signal.SIG_IGN)
+            logger.info(f'Received signal {signum}, cleaning up the backup store')
+
+        if not self._manifest.changed:  # test_m1_crash_before_save
+            logger.info('No changes detected; nothing to do')
+        elif not dry_run:
+            lock_manifest(
+                self._manifest,
+                self.config.read('private_key_filename', default=''),
+                self._save,
+                self._load,
+                self.options,
+            )
+            self.rotate_manifests()
+
+        if not preserve_scratch:
+            rmtree(get_scratch_dir(), ignore_errors=True)
+        self._manifest = None  # test_m1_crash_after_save
+
+        if signum:
+            # I don't _love_ the fact that we call sys.exit from here but I think it's a
+            # good-enough solution for now.  We'll want to revisit this if/when we introduce
+            # threading or multiprocessing or asyncio or whatever.
+            logger.info('Cleanup complete; shutting down')
+            sys.exit(0)
 
     def _write_copy(
         self,
