@@ -130,7 +130,6 @@ def itest_setup(
     test_file_history,
     *dec_args,
 ):
-    print('Setting up!')
     for tfd in dec_args:
         if tfd.path in test_file_history and tfd != test_file_history[tfd.path][-1]:
             test_file_history[tfd.path].append(tfd)

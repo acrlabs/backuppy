@@ -8,6 +8,10 @@ import staticconf.testing
 from backuppy.exceptions import DiffTooLargeException
 from backuppy.exceptions import ManifestLockedException
 from backuppy.manifest import ManifestEntry
+from backuppy.stores.backup_store import _cleanup_and_exit
+from backuppy.stores.backup_store import _register_unlocked_store
+from backuppy.stores.backup_store import _SIGNALS_TO_HANDLE
+from backuppy.stores.backup_store import _unregister_store
 from backuppy.stores.backup_store import BackupStore
 from backuppy.util import get_scratch_dir
 
@@ -64,8 +68,10 @@ def test_unlock(fs, backup_store, manifest_exists):
     os.makedirs(get_scratch_dir())
     with mock.patch('backuppy.stores.backup_store.Manifest') as mock_manifest, \
             mock.patch('backuppy.stores.backup_store.unlock_manifest') as mock_unlock_manifest, \
-            mock.patch('backuppy.stores.backup_store.rmtree') as mock_remove:
-        backup_store._do_cleanup = mock.Mock()
+            mock.patch('backuppy.stores.backup_store.rmtree') as mock_remove, \
+            mock.patch('backuppy.stores.backup_store._register_unlocked_store') as mock_register, \
+            mock.patch('backuppy.stores.backup_store._unregister_store') as mock_unregister:
+        backup_store.do_cleanup = mock.Mock()
         mock_unlock_manifest.return_value = mock_manifest.return_value
         if manifest_exists:
             backup_store._query.return_value = ['manifest.1234123']
@@ -73,32 +79,9 @@ def test_unlock(fs, backup_store, manifest_exists):
             pass
         assert mock_unlock_manifest.call_count == manifest_exists
         assert mock_remove.call_count == 1
-        assert backup_store._do_cleanup.call_args == mock.call(
-            None,
-            None,
-            dry_run=False,
-            preserve_scratch=False,
-        )
-
-
-def test_unlock_signal(fs, backup_store):
-    os.makedirs(get_scratch_dir())
-    with mock.patch('backuppy.stores.backup_store.Manifest'), \
-            mock.patch('backuppy.stores.backup_store.unlock_manifest'), \
-            mock.patch('backuppy.stores.backup_store.rmtree'):
-        backup_store._do_cleanup = mock.Mock()
-        with backup_store.unlock():
-            os.kill(os.getpid(), signal.SIGINT)
-
-        # This is a little wonky; since we've mocked out _do_cleanup, it won't exit the program
-        # which means we actually call it twice.  So here we just check to make sure the _first_
-        # time we call it is correct, since the second time "won't happen"
-        assert backup_store._do_cleanup.call_args_list[0] == mock.call(
-            signal.SIGINT,
-            mock.ANY,
-            dry_run=False,
-            preserve_scratch=False,
-        )
+        assert backup_store.do_cleanup.call_args == mock.call(False, False)
+        assert mock_register.call_count == 1
+        assert mock_unregister.call_count == 1
 
 
 def test_open_locked_manifest(backup_store):
@@ -213,16 +196,12 @@ def test_rotate_manifests(backup_store, max_manifest_versions):
 @pytest.mark.parametrize('dry_run', [True, False])
 @pytest.mark.parametrize('preserve_scratch', [True, False])
 @pytest.mark.parametrize('manifest', [None, mock.Mock(changed=True), mock.Mock(changed=False)])
-@pytest.mark.parametrize('signal', [(None, None), (signal.SIGINT, mock.Mock())])
-def test_do_cleanup(fs, backup_store, manifest, signal, dry_run, preserve_scratch):
+def test_do_cleanup(fs, backup_store, manifest, dry_run, preserve_scratch):
     with mock.patch('backuppy.stores.backup_store.rmtree') as mock_remove, \
-            mock.patch('backuppy.stores.backup_store.lock_manifest') as mock_lock, \
-            mock.patch('backuppy.stores.backup_store.sys.exit') as mock_exit:
+            mock.patch('backuppy.stores.backup_store.lock_manifest') as mock_lock:
         backup_store._manifest = manifest
         backup_store.rotate_manifests = mock.Mock()
-        backup_store._do_cleanup(
-            signal[0],
-            signal[1],
+        backup_store.do_cleanup(
             dry_run=dry_run,
             preserve_scratch=preserve_scratch
         )
@@ -232,7 +211,6 @@ def test_do_cleanup(fs, backup_store, manifest, signal, dry_run, preserve_scratc
         ))
         assert mock_remove.call_count == int(bool(manifest and not preserve_scratch))
         assert backup_store._manifest is None
-        assert mock_exit.call_count == int(bool(manifest and signal[0]))
 
 
 @pytest.mark.parametrize('dry_run', [True, False])
@@ -290,3 +268,50 @@ def test_write_diff_too_big(backup_store, current_entry, dry_run, caplog):
     assert entry.base_key_pair is None
     assert backup_store.save.call_count == int(not dry_run)
     assert 'Saving a new copy of /foo' in caplog.text
+
+
+def test_cleanup_and_exit_no_store(backup_store):
+    backup_store.do_cleanup = mock.Mock()
+    with mock.patch('backuppy.stores.backup_store.signal.signal') as mock_signal, \
+            pytest.raises(SystemExit):
+        _cleanup_and_exit(signal.SIGINT, mock.Mock(), True, True)
+
+    assert mock_signal.call_args_list == [
+        mock.call(signal.SIGINT, signal.SIG_IGN)
+    ]
+    assert backup_store.do_cleanup.call_count == 0
+
+
+@pytest.mark.parametrize('side_effect', [None, Exception])
+def test_cleanup_and_exit(backup_store, side_effect):
+    backup_store.do_cleanup = mock.Mock(side_effect=side_effect)
+    with mock.patch('backuppy.stores.backup_store._UNLOCKED_STORE', backup_store), \
+            mock.patch('backuppy.stores.backup_store.signal.signal') as mock_signal, \
+            pytest.raises(SystemExit):
+        _cleanup_and_exit(signal.SIGINT, mock.Mock(), True, True)
+
+    assert mock_signal.call_args_list == [
+        mock.call(signal.SIGINT, signal.SIG_IGN)
+    ]
+    assert backup_store.do_cleanup.call_count == 1
+
+
+def test_register_unlocked_store(backup_store):
+    with mock.patch('backuppy.stores.backup_store._UNLOCKED_STORE', backup_store) as store, \
+            mock.patch('backuppy.stores.backup_store.signal.signal') as mock_signal:
+        _register_unlocked_store(backup_store, True, True)
+    assert store == backup_store
+    assert mock_signal.call_args_list == [
+        mock.call(sig, mock.ANY)
+        for sig in _SIGNALS_TO_HANDLE
+    ]
+
+
+def test_unregister_store():
+    with mock.patch('backuppy.stores.backup_store._UNLOCKED_STORE'), \
+            mock.patch('backuppy.stores.backup_store.signal.signal') as mock_signal:
+        _unregister_store()
+    assert mock_signal.call_args_list == [
+        mock.call(sig, signal.SIG_DFL)
+        for sig in _SIGNALS_TO_HANDLE
+    ]
