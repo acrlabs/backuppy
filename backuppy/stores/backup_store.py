@@ -38,6 +38,8 @@ from backuppy.util import regex_search_list
 from backuppy.util import sha_to_path
 
 logger = colorlog.getLogger(__name__)
+_UNLOCKED_STORE = None
+_SIGNALS_TO_HANDLE = (signal.SIGINT, signal.SIGTERM)
 
 
 class BackupStore(metaclass=ABCMeta):
@@ -101,21 +103,13 @@ class BackupStore(metaclass=ABCMeta):
                     self._load,
                     self.options,
                 )
-
-            # Safely clean up after Ctrl-C or SIGTERM; this minimizes the amount of duplicate
-            # work we have to do in the event that we cancel the backup partway through
-            sig_handler = partial(
-                self._do_cleanup,
-                dry_run=dry_run,
-                preserve_scratch=preserve_scratch
-            )
-            for sig in (signal.SIGINT, signal.SIGTERM):
-                signal.signal(sig, sig_handler)
+            _register_unlocked_store(self, dry_run, preserve_scratch)
 
             yield
 
         finally:
-            self._do_cleanup(None, None, dry_run=dry_run, preserve_scratch=preserve_scratch)
+            self.do_cleanup(dry_run, preserve_scratch)
+            _unregister_store()
 
     def save_if_new(self, abs_file_name: str, dry_run: bool = False) -> None:
         """ The main workhorse function; determine if a file has changed, and if so, back it up!
@@ -247,11 +241,8 @@ class BackupStore(metaclass=ABCMeta):
             self._delete(manifest)
             self._delete(MANIFEST_KEY_FILE.format(ts=ts))
 
-    def _do_cleanup(
+    def do_cleanup(
         self,
-        signum: Optional[int],
-        frame: Optional[FrameType],
-        *,
         dry_run: bool,
         preserve_scratch: bool,
     ) -> None:
@@ -268,10 +259,6 @@ class BackupStore(metaclass=ABCMeta):
         if not self._manifest:
             return
 
-        if signum:
-            signal.signal(signum, signal.SIG_IGN)
-            logger.info(f'Received signal {signum}, cleaning up the backup store')
-
         if not self._manifest.changed:  # test_m1_crash_before_save
             logger.info('No changes detected; nothing to do')
         elif not dry_run:
@@ -287,13 +274,6 @@ class BackupStore(metaclass=ABCMeta):
         if not preserve_scratch:
             rmtree(get_scratch_dir(), ignore_errors=True)
         self._manifest = None  # test_m1_crash_after_save
-
-        if signum:
-            # I don't _love_ the fact that we call sys.exit from here but I think it's a
-            # good-enough solution for now.  We'll want to revisit this if/when we introduce
-            # threading or multiprocessing or asyncio or whatever.
-            logger.info('Cleanup complete; shutting down')
-            sys.exit(0)
 
     def _write_copy(
         self,
@@ -409,3 +389,43 @@ class BackupStore(metaclass=ABCMeta):
             options = dict()
 
         return {**DEFAULT_OPTIONS, **options}  # type: ignore
+
+
+def _cleanup_and_exit(signum: int, frame: FrameType, dry_run: bool, preserve_scratch: bool) -> None:
+    """ Signal handler to safely clean up after Ctrl-C or SIGTERM; this minimizes the amount of
+    duplicate work we have to do in the event that we cancel the backup partway through
+    """
+
+    signal.signal(signum, signal.SIG_IGN)
+    logger.info(f'Received signal {signum}, cleaning up the backup store')
+
+    if _UNLOCKED_STORE:
+        try:
+            _UNLOCKED_STORE.do_cleanup(dry_run, preserve_scratch)
+        except Exception as e:
+            logger.exception(f'Shutdown was requested, but there was an error cleaning up: {str(e)}')
+            sys.exit(1)
+
+    logger.info('Cleanup complete; shutting down')
+    sys.exit(0)
+
+
+def _register_unlocked_store(store: BackupStore, dry_run: bool, preserve_scratch: bool) -> None:
+    global _UNLOCKED_STORE
+    _UNLOCKED_STORE = store
+
+    sig_handler = partial(
+        _cleanup_and_exit,
+        dry_run=dry_run,
+        preserve_scratch=preserve_scratch
+    )
+    for sig in _SIGNALS_TO_HANDLE:
+        signal.signal(sig, sig_handler)
+
+
+def _unregister_store() -> None:
+    global _UNLOCKED_STORE
+    _UNLOCKED_STORE = None
+
+    for sig in _SIGNALS_TO_HANDLE:
+        signal.signal(sig, signal.SIG_DFL)
