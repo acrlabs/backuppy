@@ -12,7 +12,7 @@ from backuppy.stores.backup_store import BackupStore
 @mock.patch('backuppy.cli.backup.file_walker')
 @pytest.mark.parametrize('dry_run', [True, False])
 def test_scan_directory(file_walker, dry_run):
-    file_walker.return_value = ['/file1', '/error', '/file2', '/file3', '/skip']
+    file_walker.return_value = ['/file1', '/error', '/file2', '/file3']
     store = mock.MagicMock(spec=BackupStore)
 
     def save_if_new(filename, dry_run):
@@ -21,7 +21,7 @@ def test_scan_directory(file_walker, dry_run):
 
     store.save_if_new.side_effect = save_if_new
 
-    _scan_directory('/', store, [re.compile('skip')], dry_run)
+    _scan_directory('/', store, None, dry_run)
     assert store.save_if_new.call_args_list == [
         mock.call('/file1', dry_run),
         mock.call('/error', dry_run),
