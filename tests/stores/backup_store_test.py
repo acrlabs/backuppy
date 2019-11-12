@@ -7,6 +7,7 @@ import staticconf.testing
 
 from backuppy.exceptions import DiffTooLargeException
 from backuppy.exceptions import ManifestLockedException
+from backuppy.manifest import Manifest
 from backuppy.manifest import ManifestEntry
 from backuppy.stores.backup_store import _cleanup_and_exit
 from backuppy.stores.backup_store import _register_unlocked_store
@@ -41,6 +42,20 @@ def current_entry():
 
 
 @pytest.fixture
+def preexisting_entry():
+    return ManifestEntry(
+        '/some/other/file',
+        '12345678',
+        '123123',
+        1000,
+        1000,
+        55555,
+        b'lkjhasdf',
+        b'12341234',
+    )
+
+
+@pytest.fixture
 def backup_store():
     backup_name = 'fake_backup1'
 
@@ -55,7 +70,10 @@ def backup_store():
         mock_io_iter.return_value.__enter__.return_value.gid = 1000
         mock_io_iter.return_value.__enter__.return_value.mode = 12345
         store = DummyBackupStore(backup_name)
-        store._manifest = mock.Mock(get_entries_by_sha=mock.Mock(return_value=[]))
+        store._manifest = mock.Mock(
+            get_entries_by_sha=mock.Mock(return_value=[]),
+            spec=Manifest,
+        )
         yield store
 
 
@@ -96,22 +114,6 @@ class TestSaveIfNew:
     def setup_store(self, backup_store):
         backup_store._write_copy = mock.Mock()
         backup_store._write_diff = mock.Mock()
-
-    def test_save_if_new_same_sha_different_file(self, backup_store, dry_run):
-        entry = mock.Mock(abs_file_name='/foo', sha='abcdef123')
-        other_entry = mock.Mock(
-            abs_file_name='/foo_copy',
-            sha='abcdef123',
-            base_sha='ffffff123',
-            key_pair=b'secret_key',
-            base_key_pair=b'base_secret_key',
-        )
-        backup_store.manifest.get_entries_by_sha.return_value = [entry, other_entry]
-        with mock.patch('backuppy.stores.backup_store.compute_sha', return_value='abcdef123'):
-            backup_store.save_if_new('/foo', dry_run)
-        assert backup_store._write_copy.call_count == 0
-        assert backup_store._write_diff.call_count == 0
-        assert backup_store.manifest.insert_or_update.call_count == int(not dry_run)
 
     def test_save_if_new_with_new_file(self, backup_store, dry_run):
         backup_store.manifest.get_entry.return_value = None
@@ -224,6 +226,16 @@ def test_write_copy(backup_store, dry_run, caplog):
     assert 'Saving a new copy of /foo' in caplog.text
 
 
+def test_write_copy_preexisting_sha(backup_store, preexisting_entry):
+    backup_store.manifest.get_entries_by_sha.return_value = [preexisting_entry]
+    entry = backup_store._write_copy('/foo', preexisting_entry.sha, mock.MagicMock(), False)
+    assert entry.sha == preexisting_entry.sha
+    assert entry.key_pair == preexisting_entry.key_pair
+    assert entry.base_sha == preexisting_entry.base_sha
+    assert entry.base_key_pair == preexisting_entry.base_key_pair
+    assert backup_store.save.call_count == 0
+
+
 @pytest.mark.parametrize('base_sha', [None, '321fedcba'])
 @pytest.mark.parametrize('dry_run', [True, False])
 def test_write_diff(backup_store, current_entry, base_sha, dry_run, caplog):
@@ -268,6 +280,24 @@ def test_write_diff_too_big(backup_store, current_entry, dry_run, caplog):
     assert entry.base_key_pair is None
     assert backup_store.save.call_count == int(not dry_run)
     assert 'Saving a new copy of /foo' in caplog.text
+
+
+def test_write_diff_preexisting_sha(backup_store, current_entry, preexisting_entry):
+    backup_store.manifest.get_entries_by_sha.return_value = [preexisting_entry]
+    with mock.patch('backuppy.stores.backup_store.compute_diff') as mock_compute_diff:
+        entry = backup_store._write_diff(
+            '/foo',
+            preexisting_entry.sha,
+            current_entry,
+            mock.MagicMock(),
+            False
+        )
+    assert entry.sha == preexisting_entry.sha
+    assert entry.key_pair == preexisting_entry.key_pair
+    assert entry.base_sha == preexisting_entry.base_sha
+    assert entry.base_key_pair == preexisting_entry.base_key_pair
+    assert backup_store.save.call_count == 0
+    assert mock_compute_diff.call_count == 0
 
 
 def test_cleanup_and_exit_no_store(backup_store):

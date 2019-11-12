@@ -11,6 +11,7 @@ from types import FrameType
 from typing import Iterator
 from typing import List
 from typing import Optional
+from typing import Tuple
 
 import colorlog
 import staticconf
@@ -120,41 +121,11 @@ class BackupStore(metaclass=ABCMeta):
         curr_entry, new_entry = self.manifest.get_entry(abs_file_name), None
         with IOIter(abs_file_name) as new_file:
             new_sha = compute_sha(new_file)
-            other_entries = [
-                e for e in self.manifest.get_entries_by_sha(new_sha)
-                if e.abs_file_name != abs_file_name
-            ]
-
-            # If the SHA already exists in the manifest, then we don't overwrite the file, we
-            # just re-use the existing data (this is safe because the data has not changed)
-            #
-            # NOTE: this is fundamentally different from the check below which looks to see if the
-            # _same_ file has just changed modes; here we're checking for the existence of a SHA
-            # in the backup store, below we're checking for the existence of a file in the file
-            # system.  The fact that they use very similar bits of logic means it's tempting to
-            # try to DRY the code here, but we deliberately don't do this.  I think it's more
-            # likely to lead to subtle, hard-to-reason-about bugs because of the difference in
-            # intent.
-            if other_entries:
-
-                # if the only thing that's changed is the metadata, we can skip saving here
-                if not curr_entry or not curr_entry.sha or new_sha != curr_entry.sha:
-                    logger.info(f'{abs_file_name} matches data already present, using that entry')
-                    new_entry = ManifestEntry(
-                        abs_file_name,
-                        other_entries[0].sha,
-                        other_entries[0].base_sha,
-                        new_file.uid,
-                        new_file.gid,
-                        new_file.mode,
-                        other_entries[0].key_pair,
-                        other_entries[0].base_key_pair,
-                    )
 
             # If the file hasn't been backed up before, or if it's been deleted previously, save a
             # new copy; we make a copy here to ensure that the contents don't change while backing
             # the file up, and that we have the correct sha
-            elif not curr_entry or not curr_entry.sha:
+            if not curr_entry or not curr_entry.sha:
                 new_entry = self._write_copy(abs_file_name, new_sha, new_file, dry_run)
 
             # If the file has been backed up, check to see if it's changed by comparing shas
@@ -284,18 +255,19 @@ class BackupStore(metaclass=ABCMeta):
     ) -> ManifestEntry:
         logger.info(f'Saving a new copy of {abs_file_name}')
 
-        key_pair = generate_key_pair()  # test_f3_file_changed_while_saving
+        entry_data = self._find_existing_entry_data(new_sha)  # test_f3_file_changed_while_saving
+        key_pair, base_sha, base_key_pair = entry_data or (generate_key_pair(), None, None)
         new_entry = ManifestEntry(  # test_m2_crash_before_file_save
             abs_file_name,
             new_sha,
-            None,
+            base_sha,
             file_obj.uid,
             file_obj.gid,
             file_obj.mode,
             key_pair,
-            None,
+            base_key_pair,
         )
-        if not dry_run:
+        if not dry_run and not entry_data:
             signature = self.save(file_obj, new_entry.sha, key_pair)
             new_entry.key_pair = key_pair + signature  # append the HMAC before writing to db
         return new_entry
@@ -310,51 +282,68 @@ class BackupStore(metaclass=ABCMeta):
     ) -> ManifestEntry:
         logger.info(f'Saving a diff for {abs_file_name}')
 
+        entry_data = self._find_existing_entry_data(new_sha)
         # If the current entry is itself a diff, get its base; otherwise, this
         # entry becomes the base
-        if curr_entry.base_sha:
+        if entry_data:
+            key_pair, base_sha, base_key_pair = entry_data
+        elif curr_entry.base_sha:
+            key_pair = generate_key_pair()
             base_sha = curr_entry.base_sha
             base_key_pair = curr_entry.base_key_pair
         else:
+            key_pair = generate_key_pair()
             base_sha = curr_entry.sha
             base_key_pair = curr_entry.key_pair
-        assert base_key_pair  # make mypy happy; this cannot be None here
 
         # compute a diff between the version we've previously backed up and the new version
-        key_pair = generate_key_pair()
-        with IOIter() as orig_file, IOIter() as diff_file:
-            orig_file = self.load(base_sha, orig_file, base_key_pair)
-            try:
-                fd_diff = compute_diff(
-                    orig_file,
-                    file_obj,
-                    diff_file,
-                    self.options['discard_diff_percentage'],
-                )
-            except DiffTooLargeException:
-                logger.info('The computed diff was too large; saving a copy instead.')
-                logger.info(
-                    '(you can configure this threshold with the skip_diff_percentage option)'
-                )
-                file_obj.fd.seek(0)
-                return self._write_copy(abs_file_name, new_sha, file_obj, dry_run)
+        new_entry = ManifestEntry(
+            abs_file_name,
+            new_sha,
+            base_sha,
+            file_obj.uid,
+            file_obj.gid,
+            file_obj.mode,
+            key_pair,
+            base_key_pair,
+        )
 
-            new_entry = ManifestEntry(
-                abs_file_name,
-                new_sha,
-                base_sha,
-                file_obj.uid,
-                file_obj.gid,
-                file_obj.mode,
-                key_pair,
-                base_key_pair,
-            )
+        if not entry_data:
+            assert base_sha and base_key_pair
+            with IOIter() as orig_file, IOIter() as diff_file:
+                orig_file = self.load(base_sha, orig_file, base_key_pair)
+                try:
+                    fd_diff = compute_diff(
+                        orig_file,
+                        file_obj,
+                        diff_file,
+                        self.options['discard_diff_percentage'],
+                    )
+                except DiffTooLargeException:
+                    logger.info('The computed diff was too large; saving a copy instead.')
+                    logger.info(
+                        '(you can configure this threshold with the skip_diff_percentage option)'
+                    )
+                    file_obj.fd.seek(0)
+                    return self._write_copy(abs_file_name, new_sha, file_obj, dry_run)
 
-            new_entry.sha = new_sha
-            if not dry_run:
-                signature = self.save(fd_diff, new_entry.sha, key_pair)
-                new_entry.key_pair = key_pair + signature
+                new_entry.sha = new_sha
+                if not dry_run:
+                    signature = self.save(fd_diff, new_entry.sha, key_pair)
+                    new_entry.key_pair = key_pair + signature
         return new_entry
+
+    def _find_existing_entry_data(
+        self,
+        sha: str,
+    ) -> Optional[Tuple[bytes, Optional[str], Optional[bytes]]]:
+        entries = self.manifest.get_entries_by_sha(sha)
+        if entries:
+            assert len({e.key_pair for e in entries}) == 1
+            logger.debug('Found pre-existing sha in the manifest, using that data')
+            return entries[0].key_pair, entries[0].base_sha, entries[0].base_key_pair
+        else:
+            return None
 
     @abstractmethod
     def _save(self, src: IOIter, dest: str) -> None:  # pragma: no cover

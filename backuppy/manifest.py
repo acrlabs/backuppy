@@ -283,7 +283,7 @@ class Manifest:
             create table base_shas (
                 sha text not null unique,
                 base_sha text not null,
-                base_key_pair blob not null unique,
+                base_key_pair blob not null,
                 foreign key(sha) references manifest(sha)
             )
             '''
