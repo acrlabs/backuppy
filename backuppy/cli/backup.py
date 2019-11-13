@@ -31,15 +31,7 @@ def _scan_directory(
     """
     backup_store.manifest.files()
     marked_files = set()
-    for abs_file_name in file_walker(abs_base_path, logger.warning):
-
-        # Skip files that match any of the specified regular expressions
-        matched_patterns = [
-            pattern.pattern for pattern in exclusions if pattern.search(abs_file_name)
-        ]
-        if matched_patterns:
-            logger.info(f'{abs_file_name} matched exclusion(s) "{matched_patterns}"; skipping')
-            continue
+    for abs_file_name in file_walker(abs_base_path, on_error=logger.warning, exclusions=exclusions):
 
         # Mark the file as "seen" so it isn't deleted later
         marked_files.add(abs_file_name)

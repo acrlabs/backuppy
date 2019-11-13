@@ -190,7 +190,16 @@ def contents_changed_after_delete():
 def new_file_same_contents():
     with itest_setup(
         test_file_history,
-        _TestFileData('new_file', 'adz foobar'),
+        _TestFileData('new_file', 'adz foobar'),  # this points at a diff
+    ):
+        yield
+
+
+@contextmanager
+def old_file_same_contents():
+    with itest_setup(
+        test_file_history,
+        _TestFileData('bar', 'I am a walrus'),  # this points at an original
     ):
         yield
 
@@ -205,6 +214,7 @@ def new_file_same_contents():
     mode_changed,
     contents_changed_after_delete,
     new_file_same_contents,
+    old_file_same_contents,
 ])
 def test_initial_backup(dry_run, fixture):
     with fixture():
