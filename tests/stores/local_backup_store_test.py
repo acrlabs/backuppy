@@ -19,15 +19,6 @@ def mock_backup_store():
         yield LocalBackupStore(backup_name)
 
 
-@pytest.fixture(autouse=True)
-def fake_filesystem(fs):
-    fs.create_file('/scratch/foo', contents="i'm a copy of foo")
-    fs.create_file('/scratch/asdf/bar', contents="i'm a copy of bar")
-    fs.create_file('/fake/path/fake_backup/foo', contents='old boring content')
-    fs.create_file('/fake/path/fake_backup/biz/baz', contents='old boring content 2')
-    fs.create_file('/fake/path/fake_backup/fuzz/buzz', contents='old boring content 3')
-
-
 def fake_output_func(content, tmp, loc, key, iv):
     with open(loc.filename, 'w') as f:
         f.write(content)

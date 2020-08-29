@@ -56,7 +56,7 @@ def apply_diff(orig_file: IOIter, diff_file: IOIter, new_file: IOIter) -> None:
             diff = remainder[diff_len:]
 
     if diff:
-        raise DiffParseError(f'Un-parseable diff: {diff}')
+        raise DiffParseError(f'Un-parseable diff: {diff}')  # type: ignore
 
 
 def compute_diff(

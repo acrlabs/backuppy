@@ -111,7 +111,7 @@ class IOIter:
                 and total_bytes_written >= self.block_size
                 and isinstance(self.fd, io.BytesIO)
             ):
-                logger.debug2(f'overflowed memory limits, caching to disk')
+                logger.debug2('overflowed memory limits, caching to disk')
                 temp_fd = TemporaryFile(self._mode)
                 self.fd.seek(0)
                 temp_fd.write(self.fd.read())
