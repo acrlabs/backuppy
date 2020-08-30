@@ -22,6 +22,7 @@ BACKUP_ARGS = argparse.Namespace(
     config=ITEST_CONFIG,
     preserve_scratch_dir=False,
     dry_run=False,
+    name='data1_backup',
 )
 
 

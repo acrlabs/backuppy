@@ -26,7 +26,8 @@ test_file_history = dict()  # type: ignore
 BACKUP_ARGS = argparse.Namespace(
     log_level='debug',
     config=ITEST_CONFIG,
-    preserve_scratch_dir=True
+    preserve_scratch_dir=True,
+    name='data1_backup',
 )
 RESTORE_ARGS = argparse.Namespace(
     disable_compression=True,
