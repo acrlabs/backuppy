@@ -7,6 +7,7 @@ from typing import Set
 import colorlog
 import staticconf
 
+from backuppy.args import add_name_arg
 from backuppy.args import add_preserve_scratch_arg
 from backuppy.args import subparser
 from backuppy.stores import get_backup_store
@@ -51,31 +52,30 @@ def _scan_directory(
 
 def main(args: argparse.Namespace) -> None:
     """ entry point for the 'backup' subcommand """
-    for backup_name, backup_config in staticconf.read('backups').items():
-        if args.dry_run:
-            logger.warning('Running in dry-run mode; no files will be backed up!')
-        logger.info(f'Starting backup for {backup_name}')
-        backup_store = get_backup_store(backup_name)
+    if args.dry_run:
+        logger.warning('Running in dry-run mode; no files will be backed up!')
+    logger.info(f'Starting backup for {args.name}')
+    backup_store = get_backup_store(args.name)
 
-        with backup_store.unlock(dry_run=args.dry_run, preserve_scratch=args.preserve_scratch_dir):
-            marked_files: Set[str] = set()
-            for base_path in staticconf.read_list('directories', namespace=backup_name):
-                abs_base_path = os.path.abspath(base_path)
-                exclusions = compile_exclusions(
-                    staticconf.read_list('exclusions', [], namespace=backup_name)
-                )
-                marked_files |= _scan_directory(
-                    abs_base_path,
-                    backup_store,
-                    exclusions,
-                    args.dry_run,
-                )
+    with backup_store.unlock(dry_run=args.dry_run, preserve_scratch=args.preserve_scratch_dir):
+        marked_files: Set[str] = set()
+        for base_path in staticconf.read_list('directories', namespace=args.name):
+            abs_base_path = os.path.abspath(base_path)
+            exclusions = compile_exclusions(
+                staticconf.read_list('exclusions', [], namespace=args.name)
+            )
+            marked_files |= _scan_directory(
+                abs_base_path,
+                backup_store,
+                exclusions,
+                args.dry_run,
+            )
 
-            for abs_file_name in backup_store.manifest.files() - marked_files:
-                logger.info(f'{abs_file_name} has been deleted')
-                if not args.dry_run:
-                    backup_store.manifest.delete(abs_file_name)
-        logger.info(f'Backup for {backup_name} finished')
+        for abs_file_name in backup_store.manifest.files() - marked_files:
+            logger.info(f'{abs_file_name} has been deleted')
+            if not args.dry_run:
+                backup_store.manifest.delete(abs_file_name)
+    logger.info(f'Backup for {args.name} finished')
 
 
 @subparser('backup', 'perform a backup of all configured locations', main)
@@ -85,4 +85,5 @@ def add_backup_parser(subparser) -> None:  # pragma: no cover
         action='store_true',
         help='Only print what would happen, do not perform any actions',
     )
+    add_name_arg(subparser)
     add_preserve_scratch_arg(subparser)
