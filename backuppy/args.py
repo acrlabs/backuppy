@@ -78,6 +78,17 @@ def parse_args(
         choices=['debug', 'debug2', 'info', 'warning', 'error', 'critical'],
     )
     root_parser.add_argument(
+        '--log-file',
+        default=None,
+        help='Create a rotating file log in addition to stdout'
+    )
+    root_parser.add_argument(
+        '--log-file-level',
+        default='info',
+        choices=['debug', 'debug2', 'info', 'warning', 'error', 'critical'],
+        help='Log level for the rotated log file; has no effect if no log file is specified'
+    )
+    root_parser.add_argument(
         '-v', '--version',
         action='version',
         version='backuppy' + __version__
