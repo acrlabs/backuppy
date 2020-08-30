@@ -100,8 +100,8 @@ def decrypt_and_unpack(
         if options['use_encryption'] else identity
     )
     decompress_obj = zlib.decompressobj()
-    unzip_fn: Callable[[bytes], bytes] = (  # type: ignore
-        decompress_obj.decompress
+    unzip_fn: Callable[[bytes], bytes] = (
+        decompress_obj.decompress  # type: ignore
         if options['use_compression'] else identity
     )
     hmac = HMAC(key, SHA256(), default_backend())
