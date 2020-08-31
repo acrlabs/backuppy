@@ -28,9 +28,9 @@ def mock_backup_store():
             staticconf.testing.PatchConfiguration({
                 'protocol': {
                     'type': 's3',
-                    'awsAccessKeyId': 'ACCESS_KEY',
-                    'awsSecretAccessKey': 'SECRET_ACCESS_KEY',
-                    'awsRegion': 'us-west-2',
+                    'aws_access_key_id': 'ACCESS_KEY',
+                    'aws_secret_access_key': 'SECRET_ACCESS_KEY',
+                    'aws_region': 'us-west-2',
                     'bucket': 'test_bucket',
                 }
             },

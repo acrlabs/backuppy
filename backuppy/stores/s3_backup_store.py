@@ -17,9 +17,9 @@ class S3BackupStore(BackupStore):
     def __init__(self, backup_name):
         super().__init__(backup_name)
         session = boto3.session.Session(
-            aws_access_key_id=self.config.read_string('protocol.awsAccessKeyId'),
-            aws_secret_access_key=self.config.read_string('protocol.awsSecretAccessKey'),
-            region_name=self.config.read_string('protocol.awsRegion'),
+            aws_access_key_id=self.config.read_string('protocol.aws_access_key_id'),
+            aws_secret_access_key=self.config.read_string('protocol.aws_secret_access_key'),
+            region_name=self.config.read_string('protocol.aws_region'),
         )
         self._bucket = self.config.read_string('protocol.bucket')
         self._client = session.client('s3')
@@ -34,7 +34,12 @@ class S3BackupStore(BackupStore):
         logger.info(f'Writing {src.filename} to {self._bucket}')
         # writing objects to S3 is guaranteed to be atomic, so no need for checks here
         src.fd.seek(0)
-        self._client.put_object(Bucket=self._bucket, Body=src.fd, Key=dest)
+        self._client.put_object(
+            Bucket=self._bucket,
+            Key=dest,
+            Body=src.fd,
+            StorageClass=self.config.read_string('protocol.storage_class', default='STANDARD'),
+        )
 
     def _load(self, path: str, output_file: IOIter) -> IOIter:
         logger.info(f'Reading {path} from {self._bucket}')
