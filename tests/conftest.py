@@ -19,13 +19,13 @@ def test_config_file():
         'backups': {
             'fake_backup1': {
                 'directories': ['/path/0'],
-                'exclusions': ['dont_back_this_up', 'foo'],
+                'exclusions': [['dont_back_this_up'], 'foo'],
                 'options': [],
                 'private_key_filename': '/my/private/key',
             },
             'fake_backup2': {
                 'directories': ['/path/1', '/path/2'],
-                'exclusions': ['dont_back_this_up', 'bar'],
+                'exclusions': [[['dont_back_this_up']], 'bar'],
                 'options': [],
                 'private_key_filename': '/my/private/key',
             },

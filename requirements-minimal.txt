@@ -3,6 +3,7 @@ bsdiff4
 colorlog
 cryptography
 dateparser
+iteration-utilities
 mypy-extensions
 PyYAML
 PyStaticConfiguration

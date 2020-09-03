@@ -13,6 +13,7 @@ from typing import Pattern
 import colorlog
 import dateparser
 import staticconf
+from iteration_utilities import deepflatten
 
 from backuppy.exceptions import InputParseError
 
@@ -40,8 +41,9 @@ def ask_for_confirmation(prompt: str, default: str = 'y'):
             print('Unrecognized response; please enter "yes" or "no"')
 
 
-def compile_exclusions(exclusions: str) -> List[Pattern]:
-    return [re.compile(excl) for excl in exclusions]
+def compile_exclusions(exclusions: List[str]) -> List[Pattern]:
+    # deep-flattening the exclusions list makes it nicer to use YAML anchors
+    return [re.compile(excl) for excl in deepflatten(exclusions, ignore=str)]
 
 
 def file_walker(
