@@ -93,4 +93,4 @@ A minimal IAM profile for BackupPY to work is as follows:
 ```
 
 You can read more about S3 storage classes on the [AWS documentation](https://aws.amazon.com/s3/storage-classes/); valid choices are
-`STANDARD`, `REDUCED_REDUNDANCY`, `STANDARD_IA`, `ONEZONE_IA`, `INTELLIGENT_TIERING`, `GLACIER`, and `DEEP_ARCHIVE`.
+`STANDARD`, `STANDARD_IA`, `ONEZONE_IA`, `INTELLIGENT_TIERING`, `GLACIER`, and `DEEP_ARCHIVE`.

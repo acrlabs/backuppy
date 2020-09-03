@@ -64,6 +64,10 @@ def setup_logging(
 
         logging.getLogger().setLevel(min_log_level)
 
+        # these logs are super noisy, turn them off
+        logging.getLogger('botocore').setLevel(max(logging.INFO, log_level))
+        logging.getLogger('boto3').setLevel(max(logging.INFO, log_level))
+
 
 def main(arg_list: Optional[List[str]] = None) -> None:
     args = parse_args("BackupPY - an open-source backup tool", arg_list)
