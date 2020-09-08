@@ -5,11 +5,11 @@ import staticconf
 from moto import mock_s3
 
 from backuppy.io import IOIter
+from backuppy.stores.s3_backup_store import DEEP_ARCHIVE_SIZE
+from backuppy.stores.s3_backup_store import GLACIER_SIZE
+from backuppy.stores.s3_backup_store import ONEZONE_IA_SIZE
 from backuppy.stores.s3_backup_store import S3BackupStore
 from backuppy.stores.s3_backup_store import STANDARD_IA_SIZE
-from backuppy.stores.s3_backup_store import ONEZONE_IA_SIZE
-from backuppy.stores.s3_backup_store import GLACIER_SIZE
-from backuppy.stores.s3_backup_store import DEEP_ARCHIVE_SIZE
 
 
 @pytest.fixture
@@ -93,7 +93,7 @@ def test_compute_object_storage_class_size_1(mock_backup_store, sc):
             {'protocol': {'storage_class': sc}},
             namespace='fake_backup'
     ):
-        assert mock_backup_store._compute_object_storage_class(mock.Mock()) == sc
+        assert mock_backup_store._compute_object_storage_class(mock.Mock(filename='foo')) == sc
 
 
 @pytest.mark.parametrize('size', [STANDARD_IA_SIZE, STANDARD_IA_SIZE - 1])
@@ -103,7 +103,7 @@ def test_compute_object_storage_class_size_2(mock_backup_store, size):
             namespace='fake_backup'
     ):
         assert mock_backup_store._compute_object_storage_class(
-            mock.Mock(size=size)
+            mock.Mock(filename='foo', size=size)
         ) == ('STANDARD_IA' if size == STANDARD_IA_SIZE else 'STANDARD')
 
 
@@ -114,7 +114,7 @@ def test_compute_object_storage_class_size_3(mock_backup_store, size):
             namespace='fake_backup'
     ):
         assert mock_backup_store._compute_object_storage_class(
-            mock.Mock(size=size)
+            mock.Mock(filename='foo', size=size)
         ) == ('ONEZONE_IA' if size == ONEZONE_IA_SIZE else 'STANDARD')
 
 
@@ -125,7 +125,7 @@ def test_compute_object_storage_class_size_4(mock_backup_store, size):
             namespace='fake_backup'
     ):
         assert mock_backup_store._compute_object_storage_class(
-            mock.Mock(size=size)
+            mock.Mock(filename='foo', size=size)
         ) == ('GLACIER' if size == GLACIER_SIZE else 'STANDARD')
 
 
@@ -136,5 +136,15 @@ def test_compute_object_storage_class_size_5(mock_backup_store, size):
             namespace='fake_backup'
     ):
         assert mock_backup_store._compute_object_storage_class(
-            mock.Mock(size=size)
+            mock.Mock(filename='foo', size=size)
         ) == ('DEEP_ARCHIVE' if size == DEEP_ARCHIVE_SIZE else 'STANDARD')
+
+
+def test_compute_object_storage_manifest(mock_backup_store):
+    with staticconf.testing.PatchConfiguration(
+            {'protocol': {'storage_class': 'DEEP_ARCHIVE'}},
+            namespace='fake_backup'
+    ):
+        assert mock_backup_store._compute_object_storage_class(
+            mock.Mock(filename='manifest-key.12345566', size=100000000000)
+        ) == 'STANDARD'

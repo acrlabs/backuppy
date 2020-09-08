@@ -1,11 +1,13 @@
-from typing import List
 import math
+from typing import List
 
 import boto3
 import colorlog
 
 from backuppy.io import BLOCK_SIZE
 from backuppy.io import IOIter
+from backuppy.manifest import MANIFEST_KEY_PREFIX
+from backuppy.manifest import MANIFEST_PREFIX
 from backuppy.stores.backup_store import BackupStore
 
 logger = colorlog.getLogger(__name__)
@@ -75,6 +77,11 @@ class S3BackupStore(BackupStore):
         """ For low-frequency access storage classes, AWS charges objects below a certain size
         as though they were larger; if the object is less than half of that minimum size, it's
         cheaper to store them in STANDARD """
+        # never stick the manifest in low-access storage
+        assert(obj.filename)
+        if obj.filename.startswith(MANIFEST_PREFIX) or obj.filename.startswith(MANIFEST_KEY_PREFIX):
+            return 'STANDARD'
+
         storage_class = self.config.read_string('protocol.storage_class', default='STANDARD')
         if (
             storage_class in REGULAR_STORAGE_CLASSES
