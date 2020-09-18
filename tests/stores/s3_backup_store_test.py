@@ -146,5 +146,8 @@ def test_compute_object_storage_manifest(mock_backup_store):
             namespace='fake_backup'
     ):
         assert mock_backup_store._compute_object_storage_class(
-            mock.Mock(filename='manifest-key.12345566', size=100000000000)
+            mock.Mock(filename='/tmp/foo/bar/manifest.12345566', size=100000000000)
+        ) == 'STANDARD'
+        assert mock_backup_store._compute_object_storage_class(
+            mock.Mock(filename='/tmp/foo/baz/manifest-key.12345566', size=100000000000)
         ) == 'STANDARD'

@@ -6,8 +6,6 @@ import colorlog
 
 from backuppy.io import BLOCK_SIZE
 from backuppy.io import IOIter
-from backuppy.manifest import MANIFEST_KEY_PREFIX
-from backuppy.manifest import MANIFEST_PREFIX
 from backuppy.stores.backup_store import BackupStore
 
 logger = colorlog.getLogger(__name__)
@@ -79,7 +77,7 @@ class S3BackupStore(BackupStore):
         cheaper to store them in STANDARD """
         # never stick the manifest in low-access storage
         assert(obj.filename)
-        if obj.filename.startswith(MANIFEST_PREFIX) or obj.filename.startswith(MANIFEST_KEY_PREFIX):
+        if 'manifest' in obj.filename:
             return 'STANDARD'
 
         storage_class = self.config.read_string('protocol.storage_class', default='STANDARD')
