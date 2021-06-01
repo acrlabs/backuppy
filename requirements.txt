@@ -19,4 +19,4 @@ s3transfer==0.3.3
 six==1.15.0
 tabulate==0.8.7
 tzlocal==2.1
-urllib3==1.25.10
+urllib3==1.26.5
