@@ -1,5 +1,4 @@
 import argparse
-import os
 from contextlib import ExitStack
 
 import mock
@@ -7,7 +6,6 @@ import pytest
 
 from backuppy.cli.restore import _confirm_restore
 from backuppy.cli.restore import _parse_destination
-from backuppy.cli.restore import _restore
 from backuppy.cli.restore import main
 from backuppy.manifest import ManifestEntry
 
@@ -50,25 +48,6 @@ def test_confirm_restore(retval, mock_manifest_entry_list, capsys):
 
     out, _ = capsys.readouterr()
     assert ('WARNING' in out) == retval
-
-
-@pytest.mark.parametrize('base_sha', [None, 'ffffffff'])
-def test_restore(base_sha, mock_manifest_entry_list, fs):
-    mock_manifest_entry_list[0].base_sha = base_sha
-    if base_sha:
-        mock_manifest_entry_list[0].base_key_pair = b'2222'
-    with mock.patch('backuppy.cli.restore.IOIter') as mock_io_iter:
-        backup_store = mock.Mock(backup_name='fake_backup1')
-        _restore(mock_manifest_entry_list, '/restore/here', backup_store)
-        assert os.path.exists('/restore/here')
-        assert mock_io_iter.call_args_list == [
-            mock.call(),
-            mock.call(),
-            mock.call('/restore/here/path/0/foo/bar'),
-        ]
-        if base_sha:
-            assert backup_store.load.call_args_list[0] == mock.call(base_sha, mock.ANY, b'2222')
-        assert backup_store.load.call_args_list[-1] == mock.call('abcd1234', mock.ANY, b'1111')
 
 
 @pytest.mark.parametrize('sha,entries', [

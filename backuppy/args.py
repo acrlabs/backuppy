@@ -106,11 +106,13 @@ def parse_args(
     from backuppy.cli.backup import add_backup_parser
     from backuppy.cli.list import add_list_parser
     from backuppy.cli.restore import add_restore_parser
+    from backuppy.cli.verify import add_verify_parser
     from backuppy.cli.get import add_get_parser
     from backuppy.cli.put import add_put_parser
     add_backup_parser(subparser)
     add_list_parser(subparser)
     add_restore_parser(subparser)
+    add_verify_parser(subparser)
     add_get_parser(subparser)
     add_put_parser(subparser)
 

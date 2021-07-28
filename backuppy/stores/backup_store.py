@@ -16,6 +16,7 @@ from typing import Tuple
 import colorlog
 import staticconf
 
+from backuppy.blob import apply_diff
 from backuppy.blob import compute_diff
 from backuppy.crypto import compress_and_encrypt
 from backuppy.crypto import decrypt_and_unpack
@@ -112,7 +113,13 @@ class BackupStore(metaclass=ABCMeta):
             self.do_cleanup(dry_run, preserve_scratch)
             _unregister_store()
 
-    def save_if_new(self, abs_file_name: str, dry_run: bool = False) -> None:
+    def save_if_new(
+        self,
+        abs_file_name: str,
+        *,
+        dry_run: bool = False,
+        force_copy: bool = False,
+    ) -> None:
         """ The main workhorse function; determine if a file has changed, and if so, back it up!
 
         :param abs_file_name: the name of the file under consideration
@@ -125,13 +132,13 @@ class BackupStore(metaclass=ABCMeta):
             # If the file hasn't been backed up before, or if it's been deleted previously, save a
             # new copy; we make a copy here to ensure that the contents don't change while backing
             # the file up, and that we have the correct sha
-            if not curr_entry or not curr_entry.sha:
-                new_entry = self._write_copy(abs_file_name, new_sha, new_file, dry_run)
+            if force_copy or not curr_entry or not curr_entry.sha:
+                new_entry = self._write_copy(abs_file_name, new_sha, new_file, force_copy, dry_run)
 
             # If the file has been backed up, check to see if it's changed by comparing shas
             elif new_sha != curr_entry.sha:
                 if regex_search_list(abs_file_name, self.options['skip_diff_patterns']):
-                    new_entry = self._write_copy(abs_file_name, new_sha, new_file, dry_run)
+                    new_entry = self._write_copy(abs_file_name, new_sha, new_file, False, dry_run)
                 else:
                     new_entry = self._write_diff(
                         abs_file_name,
@@ -166,6 +173,21 @@ class BackupStore(metaclass=ABCMeta):
             if new_entry and not dry_run:
                 self.manifest.insert_or_update(new_entry)
             return  # test_m2_crash_after_file_save
+
+    def restore_entry(
+        self,
+        entry: ManifestEntry,
+        orig_file: IOIter,
+        diff_file: IOIter,
+        restore_file: IOIter,
+    ) -> None:
+        if entry.base_sha:
+            assert entry.base_key_pair  # make mypy happy; this cannot be None here
+            self.load(entry.base_sha, orig_file, entry.base_key_pair)
+            self.load(entry.sha, diff_file, entry.key_pair)
+            apply_diff(orig_file, diff_file, restore_file)
+        else:
+            self.load(entry.sha, restore_file, entry.key_pair)
 
     def save(self, src: IOIter, dest: str, key_pair: bytes) -> bytes:
         """ Wrapper around the _save function that converts the SHA to a path and does encryption
@@ -251,11 +273,14 @@ class BackupStore(metaclass=ABCMeta):
         abs_file_name: str,
         new_sha: str,
         file_obj: IOIter,
+        force_copy: bool,
         dry_run: bool,
     ) -> ManifestEntry:
         logger.info(f'Saving a new copy of {abs_file_name}')
 
-        entry_data = self._find_existing_entry_data(new_sha)  # test_f3_file_changed_while_saving
+        entry_data = None
+        if not force_copy:
+            entry_data = self._find_existing_entry_data(new_sha)  # test_f3_file_changed_while_saving
         key_pair, base_sha, base_key_pair = entry_data or (generate_key_pair(), None, None)
         new_entry = ManifestEntry(  # test_m2_crash_before_file_save
             abs_file_name,
@@ -325,7 +350,7 @@ class BackupStore(metaclass=ABCMeta):
                         '(you can configure this threshold with the skip_diff_percentage option)'
                     )
                     file_obj.fd.seek(0)
-                    return self._write_copy(abs_file_name, new_sha, file_obj, dry_run)
+                    return self._write_copy(abs_file_name, new_sha, file_obj, False, dry_run)
 
                 new_entry.sha = new_sha
                 if not dry_run:

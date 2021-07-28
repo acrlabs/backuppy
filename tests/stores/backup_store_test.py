@@ -115,10 +115,18 @@ class TestSaveIfNew:
         backup_store._write_copy = mock.Mock()
         backup_store._write_diff = mock.Mock()
 
+    def test_force_save_if_new(self, backup_store, dry_run):
+        backup_store.manifest.get_entry.return_value = None
+        with mock.patch('backuppy.stores.backup_store.compute_sha', return_value=None):
+            backup_store.save_if_new('/foo', force_copy=True, dry_run=dry_run)
+        assert backup_store._write_copy.call_count == 1
+        assert backup_store._write_diff.call_count == 0
+        assert backup_store.manifest.insert_or_update.call_count == int(not dry_run)
+
     def test_save_if_new_with_new_file(self, backup_store, dry_run):
         backup_store.manifest.get_entry.return_value = None
         with mock.patch('backuppy.stores.backup_store.compute_sha', return_value=None):
-            backup_store.save_if_new('/foo', dry_run)
+            backup_store.save_if_new('/foo', dry_run=dry_run)
         assert backup_store._write_copy.call_count == 1
         assert backup_store._write_diff.call_count == 0
         assert backup_store.manifest.insert_or_update.call_count == int(not dry_run)
@@ -126,7 +134,7 @@ class TestSaveIfNew:
     def test_save_if_new_sha_different(self, backup_store, dry_run):
         backup_store.manifest.get_entry.return_value = mock.Mock(sha='abcdef123')
         with mock.patch('backuppy.stores.backup_store.compute_sha', return_value='321fedcba'):
-            backup_store.save_if_new('/foo', dry_run)
+            backup_store.save_if_new('/foo', dry_run=dry_run)
         assert backup_store._write_copy.call_count == 0
         assert backup_store._write_diff.call_count == 1
         assert backup_store.manifest.insert_or_update.call_count == int(not dry_run)
@@ -136,7 +144,7 @@ class TestSaveIfNew:
         entry = mock.Mock(sha='abcdef123', uid=(2000 if uid_changed else 1000), gid=1000, mode=12345)
         backup_store.manifest.get_entry.return_value = entry
         with mock.patch('backuppy.stores.backup_store.compute_sha', return_value='abcdef123'):
-            backup_store.save_if_new('/foo', dry_run)
+            backup_store.save_if_new('/foo', dry_run=dry_run)
         assert backup_store._write_copy.call_count == 0
         assert backup_store._write_diff.call_count == 0
         assert backup_store.manifest.insert_or_update.call_count == int(uid_changed and not dry_run)
@@ -147,10 +155,26 @@ class TestSaveIfNew:
                     {'options': [{'skip_diff_patterns': ['.*oo']}]},
                     namespace='fake_backup1',
         ):
-            backup_store.save_if_new('/foo', dry_run)
+            backup_store.save_if_new('/foo', dry_run=dry_run)
         assert backup_store._write_copy.call_count == 1
         assert backup_store._write_diff.call_count == 0
         assert backup_store.manifest.insert_or_update.call_count == int(not dry_run)
+
+
+@pytest.mark.parametrize('base_sha', [None, 'ffffffff'])
+def test_restore_entry(backup_store, base_sha, current_entry):
+    current_entry.base_sha = base_sha
+    if base_sha:
+        current_entry.base_key_pair = b'2222'
+        orig_file, diff_file, restore_file = mock.MagicMock(), mock.MagicMock(), mock.MagicMock()
+        backup_store.restore_entry(current_entry, orig_file, diff_file, restore_file)
+        if base_sha:
+            assert backup_store.load.call_args_list[0] == mock.call(base_sha, orig_file, b'2222')
+        assert backup_store.load.call_args_list[-1] == mock.call(
+            'abcdef123',
+            diff_file,
+            b'aaaaa2222',
+        )
 
 
 @pytest.mark.no_mocksaveload
@@ -218,7 +242,7 @@ def test_do_cleanup(fs, backup_store, manifest, dry_run, preserve_scratch):
 @pytest.mark.parametrize('dry_run', [True, False])
 def test_write_copy(backup_store, dry_run, caplog):
     with mock.patch('backuppy.stores.backup_store.generate_key_pair', return_value=b'11111'):
-        entry = backup_store._write_copy('/foo', '12345678', mock.MagicMock(), dry_run)
+        entry = backup_store._write_copy('/foo', '12345678', mock.MagicMock(), False, dry_run)
     assert entry.sha == '12345678'
     # no signature computed in dry-run mode
     assert entry.key_pair == b'111112222' if not dry_run else b'11111'
@@ -226,14 +250,22 @@ def test_write_copy(backup_store, dry_run, caplog):
     assert 'Saving a new copy of /foo' in caplog.text
 
 
-def test_write_copy_preexisting_sha(backup_store, preexisting_entry):
+@pytest.mark.parametrize('force_copy', [True, False])
+def test_write_copy_preexisting_sha(backup_store, force_copy, preexisting_entry):
     backup_store.manifest.get_entries_by_sha.return_value = [preexisting_entry]
-    entry = backup_store._write_copy('/foo', preexisting_entry.sha, mock.MagicMock(), False)
+    entry = backup_store._write_copy(
+        '/foo',
+        preexisting_entry.sha,
+        mock.MagicMock(),
+        force_copy,
+        False,
+    )
     assert entry.sha == preexisting_entry.sha
-    assert entry.key_pair == preexisting_entry.key_pair
-    assert entry.base_sha == preexisting_entry.base_sha
-    assert entry.base_key_pair == preexisting_entry.base_key_pair
-    assert backup_store.save.call_count == 0
+    if not force_copy:
+        assert entry.key_pair == preexisting_entry.key_pair
+    assert entry.base_sha == (preexisting_entry.base_sha if not force_copy else None)
+    assert entry.base_key_pair == (preexisting_entry.base_key_pair if not force_copy else None)
+    assert backup_store.save.call_count == int(force_copy)
 
 
 @pytest.mark.parametrize('base_sha', [None, '321fedcba'])
