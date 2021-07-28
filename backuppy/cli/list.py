@@ -16,7 +16,7 @@ from backuppy.util import format_time
 from backuppy.util import parse_time
 
 DASHES = '-' * 80
-SUMMARY_HEADERS: List[str] = ['filename', 'versions', 'last backup time']
+SUMMARY_HEADERS: List[str] = ['filename', 'versions', 'del?', 'last backup time']
 DETAILS_HEADERS: List[str] = ['sha', 'uid', 'gid', 'permissions', 'backup time']
 
 
@@ -28,13 +28,26 @@ def _split_root_prefix(abs_file_name: str, backup_name: str) -> Tuple[str, str]:
     raise ValueError(f'{abs_file_name} does not start with any directory prefix')
 
 
-def _print_summary(backup_name: str, search_results: List[QueryResponse]) -> None:
-    contents: List[Tuple[str, int, str]] = []
+def _print_summary(
+    backup_name: str,
+    search_results: List[QueryResponse],
+    deleted_only: bool,
+    changed_only: bool,
+) -> None:
+    contents: List[Tuple[str, int, str, str]] = []
 
     for i, (abs_file_name, history) in enumerate(search_results):
         root_directory, filename = _split_root_prefix(search_results[i][0], backup_name)
         backup_time_str = format_time(history[0].commit_timestamp)
-        contents.append((filename, len(history), backup_time_str))
+        deleted_str = '' if history[0].sha else 'y'
+
+        # If the deleted_only flag is present and the SHA is not None, this file _wasn't_
+        # deleted, so don't show it.  Similarly, if the changed_only flag is present and the
+        # history length is 1, don't show it.  A file has to have a history of at least 2 if
+        # it's been deleted so these can be present in the same check.
+        if (not (deleted_only and history[0].sha)) and (not changed_only or len(history) > 1):
+            contents.append((filename, len(history), deleted_str, backup_time_str))
+
         if i == len(search_results) - 1 or not search_results[i+1][0].startswith(root_directory):
             print(f'\n{DASHES}\n{root_directory}\n{DASHES}')
             print(tabulate(contents, headers=SUMMARY_HEADERS))
@@ -43,20 +56,27 @@ def _print_summary(backup_name: str, search_results: List[QueryResponse]) -> Non
     print('')
 
 
-def _print_details(backup_name: str, search_results: List[QueryResponse], sha_length: int) -> None:
+def _print_details(
+    backup_name: str,
+    search_results: List[QueryResponse],
+    deleted_only: bool,
+    changed_only: bool,
+    sha_length: int,
+) -> None:
     for abs_file_name, history in search_results:
-        contents = [
-            (
-                format_sha(h.sha, sha_length),
-                h.uid,
-                h.gid,
-                (stat.filemode(h.mode) if h.mode else '<deleted>'),
-                format_time(h.commit_timestamp),
-            )
-            for h in history
-        ]
-        print(f'\n{DASHES}\n{abs_file_name}\n{DASHES}')
-        print(tabulate(contents, headers=DETAILS_HEADERS))
+        if (not (deleted_only and history[0].sha)) and (not changed_only or len(history) > 1):
+            contents = [
+                (
+                    format_sha(h.sha, sha_length),
+                    h.uid,
+                    h.gid,
+                    (stat.filemode(h.mode) if h.mode else '<deleted>'),
+                    format_time(h.commit_timestamp),
+                )
+                for h in history
+            ]
+            print(f'\n{DASHES}\n{abs_file_name}\n{DASHES}')
+            print(tabulate(contents, headers=DETAILS_HEADERS))
     print('')
 
 
@@ -74,9 +94,9 @@ def main(args: argparse.Namespace) -> None:
             like=args.like,
         )
     if not args.details:
-        _print_summary(args.name, search_results)
+        _print_summary(args.name, search_results, args.deleted, args.changed)
     else:
-        _print_details(args.name, search_results, args.sha_length)
+        _print_details(args.name, search_results, args.deleted, args.changed, args.sha_length)
 
 
 @subparser('list', 'list the contents of a backup set', main)
@@ -102,6 +122,16 @@ def add_list_parser(subparser) -> None:  # pragma: no cover
         '--before',
         metavar='TIME',
         help='Only list files backed up before this time',
+    )
+    subparser.add_argument(
+        '--deleted',
+        action='store_true',
+        help='Only show deleted files',
+    )
+    subparser.add_argument(
+        '--changed',
+        action='store_true',
+        help='Only show files with more than one version',
     )
     subparser.add_argument(
         '--file-limit',
