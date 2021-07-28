@@ -5,6 +5,7 @@ from itertools import repeat
 from typing import Callable
 from typing import Generator
 from typing import Tuple
+from typing import cast
 
 import colorlog
 from cryptography.exceptions import InvalidSignature
@@ -187,7 +188,10 @@ def decrypt_and_verify(data: bytes, private_key_filename: str) -> bytes:
 
 def _get_key(private_key_filename: str) -> RSAPrivateKey:
     with open(private_key_filename, 'rb') as priv_kf:
-        private_key = serialization.load_pem_private_key(priv_kf.read(), None, default_backend())
+        private_key = cast(
+            RSAPrivateKey,
+            serialization.load_pem_private_key(priv_kf.read(), None, default_backend()),
+        )
 
     if private_key.key_size != RSA_KEY_SIZE_BITS:
         raise ValueError(
