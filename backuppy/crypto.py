@@ -3,9 +3,9 @@ import zlib
 from itertools import chain
 from itertools import repeat
 from typing import Callable
+from typing import cast
 from typing import Generator
 from typing import Tuple
-from typing import cast
 
 import colorlog
 from cryptography.exceptions import InvalidSignature
