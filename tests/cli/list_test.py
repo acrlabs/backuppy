@@ -24,6 +24,13 @@ def mock_search_results():
             ManifestEntry('/path/2/file2', '1b1dedef', None, 1000, 1000, 12345, b'4444', None, 105),
             ManifestEntry('/path/2/file2', '1b2dede1', None, 1000, 1000, 12345, b'5555', None, 65),
         ]),
+        ('/path/2/file3', [
+            ManifestEntry('/path/2/file2', None, None, None, None, None, None, None, 176),
+            ManifestEntry('/path/2/file2', 'ffffeeee', None, 1000, 1000, 12345, b'6666', None, 105),
+        ]),
+        ('/path/2/file4', [
+            ManifestEntry('/path/2/file2', '12834567', None, 1000, 1000, 12345, b'7777', None, 105),
+        ]),
     ]
 
 
@@ -36,15 +43,30 @@ def test_split_root_prefix_not_present():
         _split_root_prefix('/path/0/the_file', 'fake_backup2')
 
 
-def test_print_summary(mock_search_results, capsys):
-    _print_summary('fake_backup2', mock_search_results)
+@pytest.mark.parametrize('deleted,changed', [
+    (False, False),
+    (True, False),
+    (False, True),
+    (True, True),
+])
+def test_print_summary(deleted, changed, mock_search_results, capsys):
+    _print_summary('fake_backup2', mock_search_results, deleted, changed)
     out, err = capsys.readouterr()
-    assert re.search('file1.*3.*' + format_time(100), out)
-    assert re.search('file2.*2.*' + format_time(105), out)
+    if not deleted:
+        assert re.search(r'file1\s+3\s+' + format_time(100), out)
+        assert re.search(r'file2\s+2\s+' + format_time(105), out)
+        if not changed:
+            assert re.search(r'file4\s+1\s+' + format_time(105), out)
+    elif changed:
+        assert not re.search('file[12]', out)
+    else:
+        assert not re.search('file[124]', out)
+
+    assert re.search(r'file3\s+2\s+y\s+' + format_time(176), out)
 
 
 def test_print_details(mock_search_results, capsys):
-    _print_details('fake_backup2', mock_search_results, 5)
+    _print_details('fake_backup2', mock_search_results, False, False, 5)
     out, err = capsys.readouterr()
     assert re.search(r'ab1de\.\.\..*' + format_time(100), out)
     assert re.search(r'ab2de\.\.\..*' + format_time(75), out)
@@ -69,6 +91,8 @@ def test_main(after, before, details):
         name='fake_backup1',
         sha_length=17,
         preserve_scratch_dir=False,
+        deleted=False,
+        changed=False,
     )
     with mock.patch('backuppy.cli.list.get_backup_store') as mock_get_store, \
             mock.patch('backuppy.cli.list.staticconf.YamlConfiguration'), \
