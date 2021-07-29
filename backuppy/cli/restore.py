@@ -101,7 +101,7 @@ def main(args: argparse.Namespace) -> None:
                 history_limit=1,
             )
             # Restore the most recent version of all files that haven't been deleted
-            files_to_restore = [h[-1] for _, h in search_results if h[-1].sha]
+            files_to_restore = [h[0] for _, h in search_results if h[0].sha]
 
         if _confirm_restore(files_to_restore, destination, destination_str):
             _restore(files_to_restore, destination, backup_store)

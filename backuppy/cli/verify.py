@@ -43,7 +43,6 @@ def _verify(files_to_verify: List[ManifestEntry], backup_store: BackupStore, sho
             sys.stdout.write(check_str)
 
         if not verified and ask_for_confirmation('Backed up file is corrupt; fix?'):
-            print(f.base_sha, f.sha)
             backup_store.save_if_new(f.abs_file_name, force_copy=True)
 
     print('Verification complete!\n')
