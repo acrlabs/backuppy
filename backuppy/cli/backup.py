@@ -38,7 +38,7 @@ def _scan_directory(
         marked_files.add(abs_file_name)
 
         try:
-            backup_store.save_if_new(abs_file_name, dry_run)
+            backup_store.save_if_new(abs_file_name, dry_run=dry_run)
         except Exception as e:
             # We never want to hard-fail a backup just because one file crashed; we'd rather back up
             # as much as we can, and log the failures for further investigation

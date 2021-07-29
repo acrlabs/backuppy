@@ -10,7 +10,6 @@ from tabulate import tabulate
 
 from backuppy.args import add_preserve_scratch_arg
 from backuppy.args import subparser
-from backuppy.blob import apply_diff
 from backuppy.io import IOIter
 from backuppy.manifest import ManifestEntry
 from backuppy.stores import get_backup_store
@@ -73,14 +72,8 @@ def _restore(
         with IOIter() as orig_file, \
                 IOIter() as diff_file, \
                 IOIter(restore_file_name) as restore_file:
+            backup_store.restore_entry(f, orig_file, diff_file, restore_file)
 
-            if f.base_sha:
-                assert f.base_key_pair  # make mypy happy; this cannot be None here
-                backup_store.load(f.base_sha, orig_file, f.base_key_pair)
-                backup_store.load(f.sha, diff_file, f.key_pair)
-                apply_diff(orig_file, diff_file, restore_file)
-            else:
-                backup_store.load(f.sha, restore_file, f.key_pair)
     print('Restore complete!\n')
 
 
@@ -108,7 +101,7 @@ def main(args: argparse.Namespace) -> None:
                 history_limit=1,
             )
             # Restore the most recent version of all files that haven't been deleted
-            files_to_restore = [h[-1] for _, h in search_results if h[-1].sha]
+            files_to_restore = [h[0] for _, h in search_results if h[0].sha]
 
         if _confirm_restore(files_to_restore, destination, destination_str):
             _restore(files_to_restore, destination, backup_store)
