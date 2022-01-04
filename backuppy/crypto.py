@@ -5,6 +5,7 @@ from itertools import repeat
 from typing import Callable
 from typing import cast
 from typing import Generator
+from typing import Optional
 from typing import Tuple
 
 import colorlog
@@ -37,7 +38,7 @@ def identity(x: bytes) -> bytes:
 def compress_and_encrypt(
     input_file: IOIter,
     output_file: IOIter,
-    key_pair: bytes,
+    key_pair: Optional[bytes],
     options: OptionsDict,
 ) -> bytes:
     """ Read data from an open file descriptor, and write the compressed, encrypted data to another
@@ -46,7 +47,7 @@ def compress_and_encrypt(
     :param input_file: an IOIter object to read plaintext data from
     :param output_file: an IOIter object to write compressed ciphertext to
     """
-    key, nonce = key_pair[:AES_KEY_SIZE], key_pair[AES_KEY_SIZE:]
+    key, nonce = (key_pair[:AES_KEY_SIZE], key_pair[AES_KEY_SIZE:]) if key_pair else (b'', b'')
     compressobj = zlib.compressobj()
     zip_fn: Callable[[bytes], bytes] = (  # type: ignore
         compressobj.compress if options['use_compression'] else identity
@@ -81,7 +82,7 @@ def compress_and_encrypt(
 def decrypt_and_unpack(
     input_file: IOIter,
     output_file: IOIter,
-    key_pair: bytes,
+    key_pair: Optional[bytes],
     options: OptionsDict,
 ) -> None:
     """ Read encrypted, GZIPed data from an open file descriptor, and write the decoded data to
@@ -94,7 +95,7 @@ def decrypt_and_unpack(
         key_pair[:AES_KEY_SIZE],
         key_pair[AES_KEY_SIZE:AES_KEY_SIZE + AES_BLOCK_SIZE],
         key_pair[AES_KEY_SIZE + AES_BLOCK_SIZE:]
-    )
+    ) if key_pair else (b'', b'', b'')
     decrypted_data = b''
     decrypt_fn: Callable[[bytes], bytes] = (
         Cipher(AES(key), CTR(nonce), backend=default_backend()).decryptor().update
@@ -131,7 +132,9 @@ def decrypt_and_unpack(
         raise BackupCorruptedError("The file's signature did not match the data") from e
 
 
-def generate_key_pair() -> bytes:
+def generate_key_pair(options: OptionsDict) -> bytes:
+    if not options['use_encryption']:
+        return b''
     return os.urandom(AES_KEY_SIZE + AES_BLOCK_SIZE)
 
 

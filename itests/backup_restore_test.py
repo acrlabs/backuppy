@@ -14,21 +14,15 @@ from backuppy.io import IOIter
 from backuppy.util import file_walker
 from backuppy.util import path_join
 from itests.conftest import _TestFileData
+from itests.conftest import BACKUP_ARGS
 from itests.conftest import BACKUP_DIR
+from itests.conftest import clean_up_temp_directories
 from itests.conftest import get_latest_manifest
 from itests.conftest import ITEST_CONFIG
 from itests.conftest import itest_setup
 from itests.conftest import RESTORE_DIR
 
 test_file_history = dict()  # type: ignore
-
-
-BACKUP_ARGS = argparse.Namespace(
-    log_level='debug',
-    config=ITEST_CONFIG,
-    preserve_scratch_dir=True,
-    name='data1_backup',
-)
 RESTORE_ARGS = argparse.Namespace(
     disable_compression=True,
     disble_encryption=True,
@@ -41,6 +35,11 @@ RESTORE_ARGS = argparse.Namespace(
     preserve_scratch_dir=True,
     yes=False,
 )
+
+
+@pytest.fixture(autouse=True, scope='module')
+def init():
+    clean_up_temp_directories()
 
 
 @pytest.fixture(autouse=True)
@@ -79,10 +78,11 @@ def assert_backup_store_correct():
             assert len(rows) == 0
             continue
         else:
-            assert len(rows) == len(history)
-            for row, expected in zip(rows, history):
-                assert row['sha'] == expected.sha
-                assert row['mode'] == expected.mode
+            deduped_history = []
+            [deduped_history.append(i) for i in history if i not in deduped_history]
+            assert len(rows) == len(deduped_history)
+            for row in rows:
+                assert (row['sha'], row['mode']) in [(e.sha, e.mode) for e in deduped_history]
 
         if latest.backup_path:
             manifest_cursor.execute(

@@ -1,3 +1,4 @@
+import argparse
 import inspect
 import os
 import re
@@ -22,6 +23,12 @@ BACKUP_DIR = os.path.join(ITEST_ROOT, 'backup', 'data1_backup')
 RESTORE_DIR = os.path.join(ITEST_ROOT, 'restore')
 ITEST_MANIFEST_PATH = os.path.join(BACKUP_DIR, MANIFEST_FILE)
 ITEST_SCRATCH = os.path.join(ITEST_ROOT, 'scratch')
+BACKUP_ARGS = argparse.Namespace(
+    log_level='debug',
+    config=ITEST_CONFIG,
+    preserve_scratch_dir=True,
+    name='data1_backup',
+)
 
 
 def compute_sha(string):
@@ -44,8 +51,7 @@ def initialize_session():
     setup_logging('debug')
 
 
-@pytest.fixture(autouse=True, scope='module')
-def initialize_module():
+def clean_up_temp_directories():
     sys.settrace(lambda a, b, c: None)
     for d in DATA_DIRS + [BACKUP_DIR, ITEST_SCRATCH]:
         try:

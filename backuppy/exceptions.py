@@ -34,5 +34,9 @@ class ManifestLockedException(BackuppyException):
     pass
 
 
+class MismatchedSHAError(BackuppyException):
+    pass
+
+
 class UnknownProtocolError(BackuppyException):
     pass

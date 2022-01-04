@@ -67,7 +67,8 @@ def _restore(
     print('Beginning restore...')
     os.makedirs(destination, exist_ok=True)
     for f in files_to_restore:
-        restore_file_name = path_join(destination, f.abs_file_name[1:])
+        stripped_abs_file_name = f.abs_file_name.removeprefix('/').replace(':', '')
+        restore_file_name = path_join(destination, stripped_abs_file_name)
 
         with IOIter() as orig_file, \
                 IOIter() as diff_file, \
@@ -82,9 +83,6 @@ def main(args: argparse.Namespace) -> None:
     destination, destination_str = _parse_destination(args.dest, args.name)
     before_timestamp = parse_time(args.before) if args.before else int(time.time())
 
-    staticconf.YamlConfiguration(args.config, flatten=False)
-    backup_set_config = staticconf.read('backups')[args.name]
-    staticconf.DictConfiguration(backup_set_config, namespace=args.name)
     backup_store = get_backup_store(args.name)
 
     with backup_store.unlock(preserve_scratch=args.preserve_scratch_dir):
