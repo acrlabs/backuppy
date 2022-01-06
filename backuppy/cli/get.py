@@ -1,7 +1,5 @@
 import argparse
 
-import staticconf
-
 from backuppy.args import add_name_arg
 from backuppy.args import subparser
 from backuppy.crypto import decrypt_and_unpack
@@ -44,9 +42,6 @@ def main(args: argparse.Namespace) -> None:
     if args.sha is not None and args.manifest is not None:
         raise ValueError('Cannot specify both SHA and manifest')
 
-    staticconf.YamlConfiguration(args.config, flatten=False)
-    backup_set_config = staticconf.read('backups')[args.name]
-    staticconf.DictConfiguration(backup_set_config, namespace=args.name)
     backup_store = get_backup_store(args.name)
 
     with backup_store.unlock():
@@ -61,7 +56,8 @@ def main(args: argparse.Namespace) -> None:
         else:
             # Retrieve the manifest instead of a specific file; we don't call unlock_manifest
             # here so that we can have control over the action
-            filename = sorted(backup_store._query(MANIFEST_PREFIX), reverse=True)[args.manifest][1:]
+            filename = sorted(backup_store._query(MANIFEST_PREFIX), reverse=True)[args.manifest]
+            filename = filename.removeprefix('/')
             private_key_filename = backup_store.config.read('private_key_filename', default='')
             key_pair = get_manifest_keypair(filename, private_key_filename, backup_store._load)
         _get(filename, key_pair, backup_store, args.action)

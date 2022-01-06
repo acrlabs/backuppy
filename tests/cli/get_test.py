@@ -52,8 +52,7 @@ def test_main_get_sha(args):
     backup_store = mock.MagicMock(manifest=mock.Mock(
         get_entries_by_sha=mock.Mock(return_value=[mock.Mock(sha='abcdef123', key_pair=b'1234')]),
     ))
-    with mock.patch('backuppy.cli.get.staticconf'), \
-            mock.patch('backuppy.cli.get.get_backup_store', return_value=backup_store), \
+    with mock.patch('backuppy.cli.get.get_backup_store', return_value=backup_store), \
             mock.patch('backuppy.cli.get._get') as mock_get:
         main(args)
         assert mock_get.call_args == mock.call('abcdef123', b'1234', backup_store, 'fetch')
@@ -61,8 +60,7 @@ def test_main_get_sha(args):
 
 def test_main_no_entries(args):
     backup_store = mock.MagicMock(manifest=mock.Mock(get_entries_by_sha=mock.Mock(return_value=[])))
-    with mock.patch('backuppy.cli.get.staticconf'), \
-            mock.patch('backuppy.cli.get.get_backup_store', return_value=backup_store), \
+    with mock.patch('backuppy.cli.get.get_backup_store', return_value=backup_store), \
             mock.patch('backuppy.cli.get._get'), \
             pytest.raises(ValueError):
         main(args)
@@ -77,8 +75,7 @@ def test_main_get_manifest(args):
         '/' + MANIFEST_PREFIX + '789',
         '/' + MANIFEST_PREFIX + '999',
     ]))
-    with mock.patch('backuppy.cli.get.staticconf'), \
-            mock.patch('backuppy.cli.get.get_backup_store', return_value=backup_store), \
+    with mock.patch('backuppy.cli.get.get_backup_store', return_value=backup_store), \
             mock.patch('backuppy.cli.get.get_manifest_keypair'), \
             mock.patch('backuppy.cli.get._get') as mock_get:
         main(args)
