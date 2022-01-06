@@ -51,9 +51,6 @@ class ManifestEntry:
         self.base_key_pair = base_key_pair
         self.commit_timestamp = commit_timestamp
 
-        # if a base sha is provided, a key_pair MUST also exist for that sha
-        assert bool(base_sha) == bool(base_key_pair)
-
     @classmethod
     def from_row(cls, row: sqlite3.Row) -> 'ManifestEntry':
         """ Helper function to construct a ManifestEntry from the database """
@@ -195,9 +192,13 @@ class Manifest:
             it because the contents of the file may have changed since backing up)
         """
         commit_timestamp = int(time.time())
+
+        # we have a unique index here -- there should never be two references
+        # for the same file/sha/uid/gid/mode in the manifest, so the "or replace"
+        # here will handle the update
         self._cursor.execute(
             '''
-            insert into manifest
+            insert or replace into manifest
             (abs_file_name, sha, uid, gid, mode, key_pair, commit_timestamp)
             values (?, ?, ?, ?, ?, ?, ?)
             ''',
@@ -211,6 +212,9 @@ class Manifest:
                 commit_timestamp,
             ),
         )
+
+        # Safe-guard to ensure manifest consistency
+        self._ensure_correct_key_pairs(entry.sha, entry.key_pair)
         if entry.base_sha:
             self._cursor.execute(
                 'insert or replace into base_shas (sha, base_sha, base_key_pair) values (?, ?, ?)',
@@ -258,6 +262,48 @@ class Manifest:
         )
         return set(row['abs_file_name'] for row in self._cursor.fetchall())
 
+    def find_duplicate_entries(self) -> List[ManifestEntry]:
+        self._cursor.execute(
+            '''
+            select * from manifest natural left join base_shas
+            where (abs_file_name, sha, uid, gid, mode) in (
+                select abs_file_name, sha, uid, gid, mode from manifest
+                where sha is not null
+                group by abs_file_name, sha, uid, gid, mode having count(*) > 1
+            )
+            '''
+        )
+        rows = self._cursor.fetchall()
+        return [ManifestEntry.from_row(row) for row in rows]
+
+    def find_shas_with_multiple_key_pairs(self) -> List[ManifestEntry]:
+        self._cursor.execute(
+            '''
+            select * from manifest natural left join base_shas
+            where sha in (
+                select sha from manifest
+                where sha is not null
+                group by sha having count(distinct key_pair) > 1
+            )
+            '''
+        )
+        rows = self._cursor.fetchall()
+        return [ManifestEntry.from_row(row) for row in rows]
+
+    def delete_entry(self, entry: ManifestEntry):
+        logger.warning(
+            f'DELETING ENTRY ({entry.abs_file_name}, {entry.sha}, {entry.commit_timestamp}) '
+            'FROM MANIFEST!!! THIS IS A DANGEROUS OPERATION!!!',
+        )
+        self._cursor.execute(
+            '''
+            delete from manifest
+            where abs_file_name=? and sha=? and commit_timestamp=?
+            ''',
+            (entry.abs_file_name, entry.sha, entry.commit_timestamp)
+        )
+        self._commit()
+
     def _commit(self):
         """ Commit the data to the database, and mark that the database has changed """
         self._conn.commit()
@@ -289,9 +335,26 @@ class Manifest:
             '''
         )
         self._cursor.execute('create index mfst_idx on manifest(abs_file_name, commit_timestamp)')
+        self._cursor.execute(
+            'create unique index mfst_unique_idx on manifest(abs_file_name, sha, uid, gid, mode)',
+        )
         self._cursor.execute('create index sha_idx on manifest(sha)')
 
         self._commit()
+
+    def _ensure_correct_key_pairs(self, sha: str, key_pair: bytes):
+        self._cursor.execute('select * from manifest where sha=? and key_pair!=?', (sha, key_pair))
+        rows = self._cursor.fetchall()
+        if len(rows) > 0:
+            logger.warning(
+                f'Found {len(rows)} entries for {sha} with invalid key pair; '
+                'force-updating to the good key-pair.'
+            )
+            self._cursor.execute('update manifest set key_pair=? where sha=?', (key_pair, sha))
+            self._cursor.execute(
+                'update base_shas set base_key_pair=? where base_sha=?',
+                (key_pair, sha),
+            )
 
 
 def get_manifest_keypair(
@@ -362,9 +425,7 @@ def lock_manifest(
     logger.debug(f'Locking manifest at {local_manifest_filename}')
 
     # First generate a new key and nonce to encrypt the manifest
-    key_pair = b''
-    if options['use_encryption']:
-        key_pair = generate_key_pair()
+    key_pair = generate_key_pair(options)
 
     # Next, use that key and nonce to encrypt and save the manifest
     new_manifest_filename = MANIFEST_FILE.format(ts=timestamp)

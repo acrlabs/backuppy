@@ -119,11 +119,12 @@ class BackupStore(metaclass=ABCMeta):
         *,
         dry_run: bool = False,
         force_copy: bool = False,
-    ) -> None:
+    ) -> Optional[ManifestEntry]:
         """ The main workhorse function; determine if a file has changed, and if so, back it up!
 
         :param abs_file_name: the name of the file under consideration
         :param dry_run: whether to actually save any data or not
+        :param force_copy: make a new copy of the file even if we could compute a diff instead
         """
         curr_entry, new_entry = self.manifest.get_entry(abs_file_name), None
         with IOIter(abs_file_name) as new_file:
@@ -172,7 +173,7 @@ class BackupStore(metaclass=ABCMeta):
 
             if new_entry and not dry_run:
                 self.manifest.insert_or_update(new_entry)
-            return  # test_m2_crash_after_file_save
+            return new_entry  # test_m2_crash_after_file_save
 
     def restore_entry(
         self,
@@ -182,7 +183,6 @@ class BackupStore(metaclass=ABCMeta):
         restore_file: IOIter,
     ) -> None:
         if entry.base_sha:
-            assert entry.base_key_pair  # make mypy happy; this cannot be None here
             self.load(entry.base_sha, orig_file, entry.base_key_pair)
             self.load(entry.sha, diff_file, entry.key_pair)
             apply_diff(orig_file, diff_file, restore_file)
@@ -213,7 +213,7 @@ class BackupStore(metaclass=ABCMeta):
         self,
         src: str,
         dest: IOIter,
-        key_pair: bytes,
+        key_pair: Optional[bytes],
     ) -> IOIter:
         """ Wrapper around the _load function that converts the SHA to a path """
         src = sha_to_path(src)
@@ -281,7 +281,11 @@ class BackupStore(metaclass=ABCMeta):
         entry_data = None
         if not force_copy:
             entry_data = self._find_existing_entry_data(new_sha)  # test_f3_file_changed_while_saving
-        key_pair, base_sha, base_key_pair = entry_data or (generate_key_pair(), None, None)
+        key_pair, base_sha, base_key_pair = entry_data or (
+            generate_key_pair(self.options),
+            None,
+            None,
+        )
         new_entry = ManifestEntry(  # test_m2_crash_before_file_save
             abs_file_name,
             new_sha,
@@ -313,11 +317,11 @@ class BackupStore(metaclass=ABCMeta):
         if entry_data:
             key_pair, base_sha, base_key_pair = entry_data
         elif curr_entry.base_sha:
-            key_pair = generate_key_pair()
+            key_pair = generate_key_pair(self.options)
             base_sha = curr_entry.base_sha
             base_key_pair = curr_entry.base_key_pair
         else:
-            key_pair = generate_key_pair()
+            key_pair = generate_key_pair(self.options)
             base_sha = curr_entry.sha
             base_key_pair = curr_entry.key_pair
 
@@ -334,7 +338,7 @@ class BackupStore(metaclass=ABCMeta):
         )
 
         if not entry_data:
-            assert base_sha and base_key_pair
+            assert base_sha
             with IOIter() as orig_file, IOIter() as diff_file:
                 orig_file = self.load(base_sha, orig_file, base_key_pair)
                 try:
@@ -347,7 +351,7 @@ class BackupStore(metaclass=ABCMeta):
                 except DiffTooLargeException:
                     logger.info('The computed diff was too large; saving a copy instead.')
                     logger.info(
-                        '(you can configure this threshold with the skip_diff_percentage option)'
+                        '(you can configure this threshold with the discard_diff_percentage option)'
                     )
                     file_obj.fd.seek(0)
                     return self._write_copy(abs_file_name, new_sha, file_obj, False, dry_run)

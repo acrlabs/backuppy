@@ -159,6 +159,7 @@ def test_insert_new_file(mock_manifest, mock_stat, base_sha, base_key_pair):
         '''
         select * from manifest left natural join base_shas
         where abs_file_name = '/not/backed/up'
+        order by commit_timestamp
         '''
     )
     rows = mock_manifest._cursor.fetchall()
@@ -184,6 +185,7 @@ def test_update(mock_manifest, mock_stat, base_sha, base_key_pair):
         '''
         select * from manifest left natural join base_shas
         where abs_file_name = '/foo'
+        order by commit_timestamp
         '''
     )
     rows = mock_manifest._cursor.fetchall()
@@ -199,6 +201,45 @@ def test_update(mock_manifest, mock_stat, base_sha, base_key_pair):
     assert rows[-1]['commit_timestamp'] == 1000
 
 
+def test_insert_duplicate(mock_manifest, mock_stat):
+    same_file = '/foo'
+    uid, gid, mode = mock_stat.st_uid, mock_stat.st_gid, mock_stat.st_mode
+    new_entry = ManifestEntry(same_file, '12345678', None, uid, gid, mode, b'1111', None)
+    mock_manifest.insert_or_update(new_entry)
+    mock_manifest._cursor.execute(
+        '''
+        select * from manifest
+        where abs_file_name = '/foo'
+        order by commit_timestamp
+        '''
+    )
+    rows = mock_manifest._cursor.fetchall()
+    assert len(rows) == 2
+    assert rows[-1]['abs_file_name'] == same_file
+    assert rows[0]['sha'] == '12345679'
+    assert rows[-1]['sha'] == '12345678'
+    assert rows[-1]['uid'] == 1000
+    assert rows[-1]['gid'] == 2000
+    assert rows[-1]['mode'] == 34622
+    assert rows[-1]['key_pair'] == b'1111'
+    assert rows[-1]['commit_timestamp'] == 1000
+
+
+def test_insert_diff_key_pair_for_sha(mock_manifest, mock_stat):
+    new_file = '/somebody_new'
+    uid, gid, mode = mock_stat.st_uid, mock_stat.st_gid, mock_stat.st_mode
+    new_entry = ManifestEntry(new_file, '12345678', None, uid, gid, mode, b'2222', None)
+    mock_manifest.insert_or_update(new_entry)
+    mock_manifest._cursor.execute(
+        '''
+        select * from manifest where sha = '12345678'
+        '''
+    )
+    rows = mock_manifest._cursor.fetchall()
+    assert len(rows) == 2
+    assert all([r['key_pair'] == b'2222' for r in rows])
+
+
 def test_delete(mock_manifest):
     deleted_file = '/foo'
     mock_manifest.delete(deleted_file)
@@ -206,6 +247,7 @@ def test_delete(mock_manifest):
         '''
         select * from manifest left natural join base_shas
         where abs_file_name = '/foo'
+        order by commit_timestamp
         '''
     )
     rows = mock_manifest._cursor.fetchall()
@@ -241,6 +283,43 @@ def test_tracked_files(mock_manifest, timestamp):
     if timestamp < 100:
         expected.add('/baz')
     assert mock_manifest.files(timestamp) == expected
+
+
+def test_find_duplicate_entries(mock_manifest):
+    mock_manifest._cursor.execute('drop index mfst_unique_idx')
+    mock_manifest._cursor.execute(
+        '''
+        insert into manifest (abs_file_name, sha, uid, gid, mode, key_pair, commit_timestamp)
+        values
+        ('/foo', '12345678', 1000, 2000, 34622, '5678', 1000),
+        ('/foo', '12345678', 1000, 3000, 34622, '5678', 1000)
+        '''
+    )
+    assert len(mock_manifest.find_duplicate_entries()) == 2
+
+
+def test_find_shas_with_multiple_key_pairs(mock_manifest):
+    mock_manifest._cursor.execute(
+        '''
+        insert into manifest (abs_file_name, sha, uid, gid, mode, key_pair, commit_timestamp)
+        values
+        ('/bar', '12345678', 1000, 3000, 34622, '5678', 1000)
+        '''
+    )
+    assert len(mock_manifest.find_shas_with_multiple_key_pairs()) == 2
+
+
+def test_delete_entry(mock_manifest):
+    mock_manifest.delete_entry(
+        ManifestEntry('/foo', '12345678', None, 1000, 2000, 34622, b'1234', None, 50),
+    )
+    mock_manifest._cursor.execute(
+        '''
+        select * from manifest where abs_file_name = '/foo'
+        '''
+    )
+    rows = mock_manifest._cursor.fetchall()
+    assert len(rows) == 1
 
 
 @pytest.mark.parametrize('use_encryption', [True, False])

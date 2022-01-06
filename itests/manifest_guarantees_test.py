@@ -9,6 +9,7 @@ from backuppy.cli.backup import main as backup
 from backuppy.util import sha_to_path
 from itests.conftest import _TestFileData
 from itests.conftest import BACKUP_DIR
+from itests.conftest import clean_up_temp_directories
 from itests.conftest import DATA_DIRS
 from itests.conftest import get_latest_manifest
 from itests.conftest import ITEST_CONFIG
@@ -47,6 +48,7 @@ def assert_manifest_correct(before):
 
 @pytest.fixture(autouse=True, scope='module')
 def setup_manifest():
+    clean_up_temp_directories()
     with itest_setup(
         test_file_history,
         _TestFileData('foo', 'asdf'),
