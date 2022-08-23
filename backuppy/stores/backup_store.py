@@ -239,12 +239,8 @@ class BackupStore(metaclass=ABCMeta):
         dry_run: bool,
         preserve_scratch: bool,
     ) -> None:
-        """ Ensure that the backup store gets cleaned up appropriately before we shut down; this
-        can be called as a signal handler, hence the first two arguments.  Otherwise this should
-        be called whenever we lock the store.
+        """ Ensure that the backup store gets cleaned up appropriately before we shut down
 
-        :param signum: if called as a signal handler, the signal num; otherwise None
-        :param frame: if called as a signal handler, the stack trace; otherwise None
         :param dry_run: whether to actually save any data or not
         :param preserve_scratch: whether to clean up the scratch directory before we exit; mainly
             used for debugging purposes
