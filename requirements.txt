@@ -4,7 +4,7 @@ git+https://github.com/drmorr0/bsdiff4@7c878c2
 cffi==1.14.6
 colorama==0.4.4
 colorlog==5.0.1
-cryptography==3.4.7
+cryptography==39.0.1
 dateparser==1.0.0
 iteration-utilities==0.11.0
 jmespath==0.10.0
