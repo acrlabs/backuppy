@@ -43,5 +43,5 @@ types-dateparser==0.1.3
 types-tabulate==0.1.1
 typing-extensions==3.10.0.0
 virtualenv==20.6.0
-Werkzeug==2.0.1
+Werkzeug==2.2.3
 xmltodict==0.12.0
