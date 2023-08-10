@@ -61,7 +61,7 @@ class BackupStore(metaclass=ABCMeta):
             configuration file
         """
         self.backup_name = backup_name
-        self.config = staticconf.NamespaceReaders(backup_name)
+        self.config = staticconf.NamespaceReaders(backup_name)  # type: ignore[attr-defined]
         self._manifest = None
 
     @contextmanager
@@ -293,8 +293,8 @@ class BackupStore(metaclass=ABCMeta):
             base_key_pair,
         )
         if not dry_run and not entry_data:
-            signature = self.save(file_obj, new_entry.sha, key_pair)
-            new_entry.key_pair = key_pair + signature  # append the HMAC before writing to db
+            signature = self.save(file_obj, new_entry.sha, key_pair)  # append the HMAC before writing to db
+            new_entry.key_pair = key_pair + signature
         return new_entry
 
     def _write_diff(
@@ -346,9 +346,7 @@ class BackupStore(metaclass=ABCMeta):
                     )
                 except DiffTooLargeException:
                     logger.info('The computed diff was too large; saving a copy instead.')
-                    logger.info(
-                        '(you can configure this threshold with the discard_diff_percentage option)'
-                    )
+                    logger.info('(you can configure this threshold with the discard_diff_percentage option)')
                     file_obj.fd.seek(0)
                     return self._write_copy(abs_file_name, new_sha, file_obj, False, dry_run)
 

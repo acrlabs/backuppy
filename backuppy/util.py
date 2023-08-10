@@ -27,7 +27,7 @@ def ask_for_confirmation(prompt: str, default: str = 'y'):
     while True:
         sys.stdout.write(f'{prompt} [{yes}/{no}] ')
         sys.stdout.flush()
-        if staticconf.read_bool('yes', default=False):
+        if staticconf.read_bool('yes', default=False):  # type: ignore[attr-defined]
             return True
 
         inp = sys.stdin.readline().strip()

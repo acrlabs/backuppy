@@ -21,7 +21,7 @@ DETAILS_HEADERS: List[str] = ['sha', 'uid', 'gid', 'permissions', 'backup time']
 
 
 def _split_root_prefix(abs_file_name: str, backup_name: str) -> Tuple[str, str]:
-    for directory in staticconf.read_list('directories', namespace=backup_name):
+    for directory in staticconf.read_list('directories', namespace=backup_name):  # type: ignore[attr-defined]
         abs_root = os.path.abspath(directory) + os.path.sep
         if abs_file_name.startswith(abs_root):
             return abs_root, abs_file_name[len(abs_root):]

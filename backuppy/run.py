@@ -42,7 +42,7 @@ def setup_logging(
             '%(log_color)s%(asctime)s %(levelname)s %(name)s(%(lineno)d) -- %(message)s'))
         log_level = getattr(logging, log_level_str.upper())
         handler.setLevel(log_level)
-        logger = colorlog.getLogger().addHandler(handler)
+        colorlog.getLogger().addHandler(handler)
 
         min_log_level = log_level
 

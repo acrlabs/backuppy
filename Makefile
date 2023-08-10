@@ -3,16 +3,16 @@
 default: venv
 
 test:
-	tox
+	mypy backuppy --ignore-missing-imports
+	coverage erase
+	coverage run -m pytest tests
+	coverage report --show-missing --fail-under 90
 
 itest:
-	tox -e itest
+	pytest -svvx itests
 
 e2e:
-	tox -e e2e
-
-venv:
-	tox -e venv
+	e2e/e2e.sh
 
 clean:
 	git clean -fdX

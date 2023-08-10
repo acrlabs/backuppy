@@ -83,7 +83,7 @@ class IOIter:
             requested_read_size = min(self.block_size, self.size)
 
             data = self.fd.read(requested_read_size)
-            logger.debug2(f'read {len(data)} bytes from {self.filename}')
+            logger.debug2(f'read {len(data)} bytes from {self.filename}')  # type: ignore[attr-defined]
             self._sha_fn.update(data)
             if not data:
                 break
@@ -111,13 +111,13 @@ class IOIter:
                 and total_bytes_written >= self.block_size
                 and isinstance(self.fd, io.BytesIO)
             ):
-                logger.debug2('overflowed memory limits, caching to disk')
+                logger.debug2('overflowed memory limits, caching to disk')  # type: ignore[attr-defined]
                 temp_fd = TemporaryFile(self._mode)
                 self.fd.seek(0)
                 temp_fd.write(self.fd.read())
                 self._fd = temp_fd
 
-            logger.debug2(f'wrote {bytes_written} bytes to {self.filename}')
+            logger.debug2(f'wrote {bytes_written} bytes to {self.filename}')  # type: ignore[attr-defined]
             self.fd.flush()
 
     def sha(self) -> str:

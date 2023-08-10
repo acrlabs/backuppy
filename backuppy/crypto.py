@@ -62,13 +62,13 @@ def compress_and_encrypt(
         yield (compressobj.flush(), False) if options['use_compression'] else (b'', False)
 
     writer = output_file.writer(); next(writer)
-    logger.debug2('starting to compress')
+    logger.debug2('starting to compress')  # type: ignore[attr-defined]
     for block, needs_compression in chain(zip(input_file.reader(), repeat(True)), last_block()):
         if needs_compression:
             block = zip_fn(block)
-        logger.debug2(f'zip_fn returned {len(block)} bytes')
+        logger.debug2(f'zip_fn returned {len(block)} bytes')  # type: ignore[attr-defined]
         block = encrypt_fn(block)
-        logger.debug2(f'encrypt_fn returned {len(block)} bytes')
+        logger.debug2(f'encrypt_fn returned {len(block)} bytes')  # type: ignore[attr-defined]
         if options['use_encryption']:
             hmac.update(block)
         writer.send(block)
@@ -112,17 +112,17 @@ def decrypt_and_unpack(
         if options['use_encryption']:
             hmac.update(encrypted_data)
         decrypted_data += decrypt_fn(encrypted_data)
-        logger.debug2(f'decrypt_fn returned {len(decrypted_data)} bytes')
+        logger.debug2(f'decrypt_fn returned {len(decrypted_data)} bytes')  # type: ignore[attr-defined]
 
         block = unzip_fn(decrypted_data)
-        logger.debug2(f'unzip_fn returned {len(block)} bytes')
+        logger.debug2(f'unzip_fn returned {len(block)} bytes')  # type: ignore[attr-defined]
         writer.send(block)
         decrypted_data = decompress_obj.unused_data
 
     # Decompress and write out the last block
     if decrypted_data:
         block = unzip_fn(decrypted_data)
-        logger.debug2(f'unzip_fn returned {len(block)} bytes')
+        logger.debug2(f'unzip_fn returned {len(block)} bytes')  # type: ignore[attr-defined]
         writer.send(block)
 
     try:

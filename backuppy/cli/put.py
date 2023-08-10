@@ -11,7 +11,7 @@ from backuppy.stores import get_backup_store
 
 def main(args: argparse.Namespace) -> None:
     staticconf.YamlConfiguration(args.config, flatten=False)
-    backup_set_config = staticconf.read('backups')[args.name]
+    backup_set_config = staticconf.read('backups')[args.name]  # type: ignore[attr-defined]
     staticconf.DictConfiguration(backup_set_config, namespace=args.name)
     backup_store = get_backup_store(args.name)
 

@@ -59,10 +59,10 @@ def main(args: argparse.Namespace) -> None:
 
     with backup_store.unlock(dry_run=args.dry_run, preserve_scratch=args.preserve_scratch_dir):
         marked_files: Set[str] = set()
-        for base_path in staticconf.read_list('directories', namespace=args.name):
+        for base_path in staticconf.read_list('directories', namespace=args.name):  # type: ignore[attr-defined]
             abs_base_path = os.path.abspath(base_path)
             exclusions = compile_exclusions(
-                staticconf.read_list('exclusions', [], namespace=args.name)
+                staticconf.read_list('exclusions', [], namespace=args.name)  # type: ignore[attr-defined]
             )
             marked_files |= _scan_directory(
                 abs_base_path,

@@ -34,7 +34,7 @@ def apply_diff(orig_file: IOIter, diff_file: IOIter, new_file: IOIter) -> None:
     diff = b''
     new_writer = new_file.writer(); next(new_writer)
     orig_reader = orig_file.reader()
-    logger.debug2('applying diff')
+    logger.debug2('applying diff')  # type: ignore[attr-defined]
     for diff_chunk in diff_file.reader():
         diff += diff_chunk
         while diff:
@@ -75,7 +75,7 @@ def compute_diff(
     total_written = 0
 
     writer = diff_file.writer(); next(writer)
-    logger.debug2('beginning diff computation')
+    logger.debug2('beginning diff computation')  # type: ignore[attr-defined]
     for orig_bytes, new_bytes in zip_longest(orig_file.reader(), new_file.reader(), fillvalue=b''):
         diff = bsdiff4.diff(orig_bytes, new_bytes)
         diff_str = str(len(diff)).encode() + SEPARATOR + diff
