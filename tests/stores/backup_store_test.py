@@ -81,8 +81,17 @@ def test_init(backup_store):
     assert backup_store.backup_name == 'fake_backup1'
 
 
+def test_unlock_no_private_key(backup_store):
+    backup_store.do_cleanup = mock.Mock()
+    with pytest.raises(FileNotFoundError), backup_store.unlock():
+        pass
+
+    assert backup_store.do_cleanup.call_args == mock.call(False, False)
+
+
 @pytest.mark.parametrize('manifest_exists', [True, False])
 def test_unlock(fs, backup_store, manifest_exists):
+    fs.create_file('/my/private/key', contents='THIS IS VERY SECRET')
     os.makedirs(get_scratch_dir())
     with mock.patch('backuppy.stores.backup_store.Manifest') as mock_manifest, \
             mock.patch('backuppy.stores.backup_store.unlock_manifest') as mock_unlock_manifest, \

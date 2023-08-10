@@ -84,6 +84,11 @@ class BackupStore(metaclass=ABCMeta):
         os.makedirs(get_scratch_dir(), exist_ok=True)
 
         try:
+            # make sure the private key for locking the backup exists _before_ we do any work :sweating:
+            private_key_filename = self.config.read('private_key_filename', default='')
+            if self.options['use_encryption'] and not os.path.exists(private_key_filename):
+                raise FileNotFoundError(f'private key file {private_key_filename} does not exist')
+
             manifests = sorted(self._query(MANIFEST_PREFIX))
             if not manifests:
                 logger.warning(
@@ -101,7 +106,7 @@ class BackupStore(metaclass=ABCMeta):
             else:
                 self._manifest = unlock_manifest(
                     manifests[-1],
-                    self.config.read('private_key_filename', default=''),
+                    private_key_filename,
                     self._load,
                     self.options,
                 )
