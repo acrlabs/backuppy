@@ -45,11 +45,11 @@ class S3BackupStore(BackupStore):
         logger.info(f'Writing {src.filename} to s3://{self._bucket}/{dest}')
         # writing objects to S3 is guaranteed to be atomic, so no need for checks here
         src.fd.seek(0)
-        self._client.put_object(
-            Bucket=self._bucket,
-            Key=dest,
-            Body=src.fd,
-            StorageClass=self._compute_object_storage_class(src),
+        self._client.upload_fileobj(
+            src.fd,
+            self._bucket,
+            dest,
+            ExtraArgs={'StorageClass': self._compute_object_storage_class(src)},
         )
 
     def _load(self, path: str, output_file: IOIter) -> IOIter:
@@ -76,7 +76,7 @@ class S3BackupStore(BackupStore):
         as though they were larger; if the object is less than half of that minimum size, it's
         cheaper to store them in STANDARD """
         # never stick the manifest in low-access storage
-        assert(obj.filename)
+        assert obj.filename
         if 'manifest' in obj.filename:
             return 'STANDARD'
 
