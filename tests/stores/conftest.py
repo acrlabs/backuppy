@@ -1,18 +1,28 @@
 import os
+import shutil
 
 import pytest
 
 
 @pytest.fixture(autouse=True)
-def fake_filesystem(fs):
-    fs.pause()
-    # boto (and possibly other stuff) needs to be able to read stuff in the real filesystem
-    if os.path.exists(os.getenv("VIRTUAL_ENV")):
-        fs.add_real_directory(os.getenv("VIRTUAL_ENV"))
-    fs.resume()
+def fake_filesystem():
+    try:
+        shutil.rmtree("/fake/path/fake_backup")
+        shutil.rmtree("/scratch")
+    except:  # noqa
+        pass
 
-    fs.create_file('/scratch/foo', contents="i'm a copy of foo")
-    fs.create_file('/scratch/asdf/bar', contents="i'm a copy of bar")
-    fs.create_file('/fake/path/fake_backup/foo', contents='old boring content')
-    fs.create_file('/fake/path/fake_backup/biz/baz', contents='old boring content 2')
-    fs.create_file('/fake/path/fake_backup/fuzz/buzz', contents='old boring content 3')
+    os.makedirs("/scratch/asdf")
+    os.makedirs("/fake/path/fake_backup/biz")
+    os.makedirs("/fake/path/fake_backup/fuzz")
+
+    with open("/scratch/foo", "w") as f:
+        f.write("i'm a copy of foo")
+    with open("/scratch/asdf/bar", "w") as f:
+        f.write("i'm a copy of bar")
+    with open("/fake/path/fake_backup/foo", "w") as f:
+        f.write("old boring content")
+    with open("/fake/path/fake_backup/biz/baz", "w") as f:
+        f.write("old boring content 2")
+    with open("/fake/path/fake_backup/fuzz/buzz", "w") as f:
+        f.write("old boring content 3")
