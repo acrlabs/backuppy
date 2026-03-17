@@ -1,10 +1,10 @@
 import argparse
-
 from unittest import mock
+
 import pytest
 
-from backuppy.cli.get import _get
 from backuppy.cli.get import ACTIONS
+from backuppy.cli.get import _get
 from backuppy.cli.get import main
 from backuppy.manifest import MANIFEST_PREFIX
 from backuppy.options import DEFAULT_OPTIONS
@@ -38,6 +38,18 @@ def test_get(action, filename):
             filename if filename.startswith(MANIFEST_PREFIX) else "ab/cd/ef123"
         )
         assert mock_decrypt.call_args[0][3] == expected_options
+
+
+def test_get_none():
+    backup_store = mock.Mock(options=DEFAULT_OPTIONS)
+    with (
+        mock.patch("backuppy.cli.get.IOIter"),
+        mock.patch("backuppy.cli.get.decrypt_and_unpack") as mock_decrypt,
+    ):
+        backup_store._load.return_value = None
+        _get("foo", b"asdfasdf", backup_store, "fetch")
+
+        assert mock_decrypt.call_count == 0
 
 
 def test_main_two_args():

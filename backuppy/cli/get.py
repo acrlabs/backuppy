@@ -1,15 +1,18 @@
 import argparse
 
+import colorlog
+
 from backuppy.args import add_name_arg
 from backuppy.args import subparser
 from backuppy.crypto import decrypt_and_unpack
 from backuppy.io import IOIter
-from backuppy.manifest import get_manifest_keypair
 from backuppy.manifest import MANIFEST_PREFIX
+from backuppy.manifest import get_manifest_keypair
 from backuppy.stores import get_backup_store
 from backuppy.stores.backup_store import BackupStore
 from backuppy.util import sha_to_path
 
+logger = colorlog.getLogger(__name__)
 ACTIONS = ["fetch", "decrypt", "unpack"]
 
 
@@ -20,7 +23,7 @@ def _get(
     action,
 ) -> None:
     print(f"Fetching {filename}...")
-    with IOIter() as encrypted_local_file, IOIter(filename) as local_file:
+    with IOIter() as _encrypted_local_file, IOIter(filename) as local_file:
         if action == "fetch":
             options = {"use_encryption": False, "use_compression": False}
         elif action == "decrypt":
@@ -28,7 +31,11 @@ def _get(
         else:
             options = {}
         to_fetch = filename if filename.startswith(MANIFEST_PREFIX) else sha_to_path(filename)
-        backup_store._load(to_fetch, encrypted_local_file)
+        encrypted_local_file = backup_store._load(to_fetch, _encrypted_local_file)
+        if encrypted_local_file is None:
+            logger.error(f"could not read {filename} from store")
+            return
+
         decrypt_and_unpack(
             encrypted_local_file,
             local_file,

@@ -19,6 +19,9 @@ ONEZONE_IA_SIZE = math.ceil(0.023 / 0.01 * IA_MIN_SIZE)
 GLACIER_SIZE = math.ceil(0.023 / 0.004 * GLACIER_MIN_SIZE)
 DEEP_ARCHIVE_SIZE = math.ceil(0.023 / 0.00099 * GLACIER_MIN_SIZE)
 
+RESTORE_DAYS = 7
+RESTORE_REQUEST_TIER = "Bulk"
+
 
 class S3BackupStore(BackupStore):
     """Back up files to a local (on-disk) location"""
@@ -51,9 +54,32 @@ class S3BackupStore(BackupStore):
             ExtraArgs={"StorageClass": self._compute_object_storage_class(src)},
         )
 
-    def _load(self, path: str, output_file: IOIter) -> IOIter:
+    def _load(self, path: str, output_file: IOIter) -> IOIter | None:
         path = path.replace("\\", "/")
-        logger.info(f"Reading s3://{self._bucket}/{path} into {output_file.filename}")
+
+        s3_path = f"s3://{self._bucket}/{path}"
+        logger.info(f"Reading {s3_path} into {output_file.filename}")
+
+        head = self._client.head_object(Bucket=self._bucket, Key=path)
+        storage_class = head.get("StorageClass", "STANDARD")
+        restore_header = head.get("Restore")
+
+        if storage_class != "STANDARD":
+            if restore_header is None:
+                logger.warning(f"{s3_path} is in {storage_class} and has not been restored, requesting now")
+                self._client.restore_object(
+                    Bucket=self._bucket,
+                    Key=path,
+                    RestoreRequest={
+                        "Days": RESTORE_DAYS,
+                        "GlacierJobParameters": {"Tier": RESTORE_REQUEST_TIER},
+                    },
+                )
+                return None
+            elif 'ongoing-request="true"' in restore_header:
+                logger.warning(f"{s3_path} is in {storage_class}; restore is in progress, please try again later")
+                return None
+
         response = self._client.get_object(Bucket=self._bucket, Key=path)
         writer = output_file.writer()
         next(writer)

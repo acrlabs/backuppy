@@ -1,10 +1,11 @@
 from unittest import mock
+
 import pytest
 
 from backuppy.exceptions import BackupCorruptedError
-from backuppy.manifest import lock_manifest
 from backuppy.manifest import Manifest
 from backuppy.manifest import ManifestEntry
+from backuppy.manifest import lock_manifest
 from backuppy.manifest import unlock_manifest
 
 INITIAL_FILES = ["/file1", "/file2", "/file3"]
@@ -280,7 +281,7 @@ def test_delete_unknown(mock_manifest, caplog):
             """
         )
         rows = mock_manifest._cursor.fetchall()
-        assert mock_logger.warn.call_count == 1
+        assert mock_logger.warning.call_count == 1
         assert not rows
 
 
