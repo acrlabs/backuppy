@@ -20,23 +20,23 @@ from backuppy.exceptions import InputParseError
 logger = colorlog.getLogger(__name__)
 
 
-def ask_for_confirmation(prompt: str, default: str = 'y'):
-    yes = 'Y' if default.lower() == 'y' else 'y'
-    no = 'n' if default.lower() == 'y' else 'N'
+def ask_for_confirmation(prompt: str, default: str = "y"):
+    yes = "Y" if default.lower() == "y" else "y"
+    no = "n" if default.lower() == "y" else "N"
 
     while True:
-        sys.stdout.write(f'{prompt} [{yes}/{no}] ')
+        sys.stdout.write(f"{prompt} [{yes}/{no}] ")
         sys.stdout.flush()
-        if staticconf.read_bool('yes', default=False):  # type: ignore[attr-defined]
+        if staticconf.read_bool("yes", default=False):  # type: ignore[attr-defined]
             return True
 
         inp = sys.stdin.readline().strip()
-        if inp.lower() in {'y', 'yes'}:
+        if inp.lower() in {"y", "yes"}:
             return True
-        elif inp.lower() in {'n', 'no'}:
+        elif inp.lower() in {"n", "no"}:
             return False
-        elif inp == '':
-            return default == 'y'
+        elif inp == "":
+            return default == "y"
         else:
             print('Unrecognized response; please enter "yes" or "no"')
 
@@ -51,7 +51,7 @@ def file_walker(
     on_error: Optional[Callable] = None,
     exclusions: Optional[List[Pattern]] = None,
 ) -> Generator[str, None, None]:
-    """ Walk through all the files in a path and yield their names one-at-a-time,
+    """Walk through all the files in a path and yield their names one-at-a-time,
     relative to the "path" value passed in.  The ordering of the returned files
     is randomized so we don't always back up the same files in the same order.
 
@@ -66,14 +66,17 @@ def file_walker(
     """
     exclusions = exclusions or []
     for root, dirs, files in os.walk(path, onerror=on_error):
-
         # Skip files and directories that match any of the specified regular expressions
         new_dirs = []
         for d in dirs:
             abs_dir_name = path_join(root, d) + os.sep
-            matched_patterns = [excl.pattern for excl in exclusions if excl.search(abs_dir_name)]
+            matched_patterns = [
+                excl.pattern for excl in exclusions if excl.search(abs_dir_name)
+            ]
             if matched_patterns:
-                logger.info(f'{abs_dir_name} matched exclusion(s) "{matched_patterns}"; skipping')
+                logger.info(
+                    f'{abs_dir_name} matched exclusion(s) "{matched_patterns}"; skipping'
+                )
             else:
                 new_dirs.append(d)  # don't need the abs name here
 
@@ -86,23 +89,27 @@ def file_walker(
         shuffle(files)
         for f in files:
             abs_file_name = path_join(root, f)
-            matched_patterns = [excl.pattern for excl in exclusions if excl.search(abs_file_name)]
+            matched_patterns = [
+                excl.pattern for excl in exclusions if excl.search(abs_file_name)
+            ]
             if matched_patterns:
-                logger.info(f'{abs_file_name} matched exclusion(s) "{matched_patterns}"; skipping')
+                logger.info(
+                    f'{abs_file_name} matched exclusion(s) "{matched_patterns}"; skipping'
+                )
             else:
                 yield path_join(root, f)
 
 
 def format_sha(sha: str, sha_length: int) -> Optional[str]:
-    return sha[:sha_length] + '...' if sha else None
+    return sha[:sha_length] + "..." if sha else None
 
 
 def format_time(timestamp: int) -> str:
-    return datetime.fromtimestamp(timestamp).strftime('%Y-%m-%d %H:%M:%S')
+    return datetime.fromtimestamp(timestamp).strftime("%Y-%m-%d %H:%M:%S")
 
 
 def get_scratch_dir() -> str:
-    return os.path.join(gettempdir(), 'backuppy')
+    return os.path.join(gettempdir(), "backuppy")
 
 
 def regex_search_list(needle: str, haystack: List[str]):

@@ -18,11 +18,11 @@ from backuppy.io import IOIter
 
 
 logger = colorlog.getLogger(__name__)
-SEPARATOR = b'|'
+SEPARATOR = b"|"
 
 
 def apply_diff(orig_file: IOIter, diff_file: IOIter, new_file: IOIter) -> None:
-    """ Given an original file and a diff file, write out a new file with the diff applied
+    """Given an original file and a diff file, write out a new file with the diff applied
 
     :param orig_file: an IOIter object whose contents are the "original" data
     :param diff_file: an IOIter object whose contents are the diff to be applied
@@ -31,10 +31,11 @@ def apply_diff(orig_file: IOIter, diff_file: IOIter, new_file: IOIter) -> None:
 
     # The outer loop reads a chunk of data at a time; the inner loop parses
     # the read chunk one step at a time and applies it
-    diff = b''
-    new_writer = new_file.writer(); next(new_writer)
+    diff = b""
+    new_writer = new_file.writer()
+    next(new_writer)
     orig_reader = orig_file.reader()
-    logger.debug2('applying diff')  # type: ignore[attr-defined]
+    logger.debug2("applying diff")  # type: ignore[attr-defined]
     for diff_chunk in diff_file.reader():
         diff += diff_chunk
         while diff:
@@ -51,12 +52,12 @@ def apply_diff(orig_file: IOIter, diff_file: IOIter, new_file: IOIter) -> None:
             try:
                 orig_block = next(orig_reader)
             except StopIteration:
-                orig_block = b''
+                orig_block = b""
             new_writer.send(bsdiff4.patch(orig_block, remainder[:diff_len]))
             diff = remainder[diff_len:]
 
     if diff:
-        raise DiffParseError(f'Un-parseable diff: {diff}')  # type: ignore
+        raise DiffParseError(f"Un-parseable diff: {diff}")  # type: ignore
 
 
 def compute_diff(
@@ -65,7 +66,7 @@ def compute_diff(
     diff_file: IOIter,
     discard_diff_percentage: Optional[float] = None,
 ) -> IOIter:
-    """ Given an open original file and a new file, compute the diff between the two
+    """Given an open original file and a new file, compute the diff between the two
 
     :param orig_file: an IOIter object whose contents are the "original" data
     :param new_file: an IOIter object whose contents are the "new" data
@@ -74,13 +75,19 @@ def compute_diff(
 
     total_written = 0
 
-    writer = diff_file.writer(); next(writer)
-    logger.debug2('beginning diff computation')  # type: ignore[attr-defined]
-    for orig_bytes, new_bytes in zip_longest(orig_file.reader(), new_file.reader(), fillvalue=b''):
+    writer = diff_file.writer()
+    next(writer)
+    logger.debug2("beginning diff computation")  # type: ignore[attr-defined]
+    for orig_bytes, new_bytes in zip_longest(
+        orig_file.reader(), new_file.reader(), fillvalue=b""
+    ):
         diff = bsdiff4.diff(orig_bytes, new_bytes)
         diff_str = str(len(diff)).encode() + SEPARATOR + diff
         total_written += len(diff_str)
-        if discard_diff_percentage and total_written > orig_file.size * discard_diff_percentage:
+        if (
+            discard_diff_percentage
+            and total_written > orig_file.size * discard_diff_percentage
+        ):
             raise DiffTooLargeException
         writer.send(diff_str)
 

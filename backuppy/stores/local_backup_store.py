@@ -14,14 +14,16 @@ logger = colorlog.getLogger(__name__)
 
 
 class LocalBackupStore(BackupStore):
-    """ Back up files to a local (on-disk) location """
+    """Back up files to a local (on-disk) location"""
 
     def __init__(self, backup_name):
         super().__init__(backup_name)
-        self.backup_location = os.path.abspath(path_join(
-            self.config.read_string('protocol.location'),
-            backup_name,
-        ))
+        self.backup_location = os.path.abspath(
+            path_join(
+                self.config.read_string("protocol.location"),
+                backup_name,
+            )
+        )
 
     def _save(self, src: IOIter, dest: str) -> None:
         assert src.filename  # can't have a tmpfile here
@@ -29,10 +31,12 @@ class LocalBackupStore(BackupStore):
         os.makedirs(os.path.dirname(abs_backup_path), exist_ok=True)
         if os.path.exists(abs_backup_path):
             logger.warning(
-                f'{abs_backup_path} already exists in the store; overwriting with new data',
+                f"{abs_backup_path} already exists in the store; overwriting with new data",
             )
 
-        logger.info(f'Writing {src.filename} to {abs_backup_path}')  # test_f2_lbs_atomicity_1
+        logger.info(  # test_f2_lbs_atomicity_1
+            f"Writing {src.filename} to {abs_backup_path}"
+        )
 
         # windows does not allow deleting an open FD, so we copy here and delete the original later
         shutil.copy2(src.filename, abs_backup_path)
@@ -40,7 +44,7 @@ class LocalBackupStore(BackupStore):
 
     def _load(self, path: str, output_file: IOIter) -> IOIter:
         abs_backup_path = path_join(self.backup_location, path)
-        logger.info(f'Reading {path} from {self.backup_location}')
+        logger.info(f"Reading {path} from {self.backup_location}")
         with IOIter(abs_backup_path) as input_file:
             io_copy(input_file, output_file)
         return output_file
@@ -76,4 +80,4 @@ class LocalBackupStore(BackupStore):
         os.remove(path_join(self.backup_location, filename))
 
     def _rel_name(self, root: str, filename: str) -> str:
-        return path_join(root[len(self.backup_location):], filename)
+        return path_join(root[len(self.backup_location) :], filename)

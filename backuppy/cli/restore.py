@@ -20,17 +20,17 @@ from backuppy.util import format_time
 from backuppy.util import parse_time
 from backuppy.util import path_join
 
-RESTORE_LIST_HEADERS = ['filename', 'sha', 'backup time']
+RESTORE_LIST_HEADERS = ["filename", "sha", "backup time"]
 SHA_LENGTH = 8
 
 
 def _parse_destination(dest_input: Optional[str], backup_name: str) -> Tuple[str, str]:
-    dest_input = dest_input or '.'
+    dest_input = dest_input or "."
     # don't use path_join here because it wipes out the './' prefix
     destination_str = os.path.join(dest_input, backup_name)
     destination = os.path.abspath(destination_str)
-    if dest_input != '.' and not os.path.isabs(destination_str):
-        destination_str = os.path.join('.', destination_str)
+    if dest_input != "." and not os.path.isabs(destination_str):
+        destination_str = os.path.join(".", destination_str)
     return destination, destination_str
 
 
@@ -39,24 +39,28 @@ def _confirm_restore(
     destination: str,
     destination_str: str,
 ) -> bool:
-    print('')
+    print("")
     if os.path.exists(destination):
         print(
-            f'WARNING: {destination_str} already exists.  '
-            'Files in this location may be overwritten.'
+            f"WARNING: {destination_str} already exists.  "
+            "Files in this location may be overwritten."
         )
-    print(f'Backuppy will restore the following files to {destination_str}:\n')
-    print(tabulate([
-        [
-            f.abs_file_name,
-            format_sha(f.sha, SHA_LENGTH),
-            format_time(f.commit_timestamp),
-        ]
-        for f in files_to_restore],
-        headers=RESTORE_LIST_HEADERS,
-    ))
-    print('')
-    return ask_for_confirmation('Continue?')
+    print(f"Backuppy will restore the following files to {destination_str}:\n")
+    print(
+        tabulate(
+            [
+                [
+                    f.abs_file_name,
+                    format_sha(f.sha, SHA_LENGTH),
+                    format_time(f.commit_timestamp),
+                ]
+                for f in files_to_restore
+            ],
+            headers=RESTORE_LIST_HEADERS,
+        )
+    )
+    print("")
+    return ask_for_confirmation("Continue?")
 
 
 def _restore(
@@ -64,22 +68,24 @@ def _restore(
     destination: str,
     backup_store: BackupStore,
 ) -> None:
-    print('Beginning restore...')
+    print("Beginning restore...")
     os.makedirs(destination, exist_ok=True)
     for f in files_to_restore:
-        stripped_abs_file_name = f.abs_file_name.removeprefix('/').replace(':', '')
+        stripped_abs_file_name = f.abs_file_name.removeprefix("/").replace(":", "")
         restore_file_name = path_join(destination, stripped_abs_file_name)
 
-        with IOIter() as orig_file, \
-                IOIter() as diff_file, \
-                IOIter(restore_file_name) as restore_file:
+        with (
+            IOIter() as orig_file,
+            IOIter() as diff_file,
+            IOIter(restore_file_name) as restore_file,
+        ):
             backup_store.restore_entry(f, orig_file, diff_file, restore_file)
 
-    print('Restore complete!\n')
+    print("Restore complete!\n")
 
 
 def main(args: argparse.Namespace) -> None:
-    staticconf.DictConfiguration({'yes': args.yes})
+    staticconf.DictConfiguration({"yes": args.yes})
     destination, destination_str = _parse_destination(args.dest, args.name)
     before_timestamp = parse_time(args.before) if args.before else int(time.time())
 
@@ -90,7 +96,7 @@ def main(args: argparse.Namespace) -> None:
         if args.sha:
             files_to_restore = backup_store.manifest.get_entries_by_sha(args.sha)
             if not files_to_restore:
-                raise ValueError(f'Sha {args.sha} does not match anything in the store')
+                raise ValueError(f"Sha {args.sha} does not match anything in the store")
 
         else:
             search_results = backup_store.manifest.search(
@@ -105,37 +111,34 @@ def main(args: argparse.Namespace) -> None:
             _restore(files_to_restore, destination, backup_store)
 
 
-@subparser('restore', 'restore files from a backup set', main)
+@subparser("restore", "restore files from a backup set", main)
 def add_restore_parser(subparser) -> None:  # pragma: no cover
     subparser.add_argument(
-        dest='like',
-        metavar='QUERY',
+        dest="like",
+        metavar="QUERY",
         default=None,
-        nargs='?',
-        help='Query string to search the backup set for',
+        nargs="?",
+        help="Query string to search the backup set for",
     )
     subparser.add_argument(
-        '--name',
-        required=True,
-        help='Name of the backup set to examine'
+        "--name", required=True, help="Name of the backup set to examine"
     )
     subparser.add_argument(
-        '--before',
-        metavar='TIME',
-        help='Restore the most recent version of the file backed up before this time',
+        "--before",
+        metavar="TIME",
+        help="Restore the most recent version of the file backed up before this time",
     )
     subparser.add_argument(
-        '--sha',
-        help='Restore the file corresponding to this SHA',
+        "--sha",
+        help="Restore the file corresponding to this SHA",
     )
     subparser.add_argument(
-        '--dest',
-        default='.',
-        help='Location to restore the file(s) to'
+        "--dest", default=".", help="Location to restore the file(s) to"
     )
     subparser.add_argument(
-        '-y', '--yes',
-        action='store_true',
-        help='Answer yes to all prompts',
+        "-y",
+        "--yes",
+        action="store_true",
+        help="Answer yes to all prompts",
     )
     add_preserve_scratch_arg(subparser)

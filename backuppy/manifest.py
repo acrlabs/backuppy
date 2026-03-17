@@ -20,12 +20,12 @@ from backuppy.util import get_scratch_dir
 from backuppy.util import path_join
 
 logger = colorlog.getLogger(__name__)
-MANIFEST_PREFIX = 'manifest.'
-MANIFEST_KEY_PREFIX = 'manifest-key.'
-MANIFEST_FILE = MANIFEST_PREFIX + '{ts}'
-MANIFEST_KEY_FILE = MANIFEST_KEY_PREFIX + '{ts}'
-_MANIFEST_TABLES = {'manifest', 'base_shas'}
-QueryResponse = Tuple[str, List['ManifestEntry']]
+MANIFEST_PREFIX = "manifest."
+MANIFEST_KEY_PREFIX = "manifest-key."
+MANIFEST_FILE = MANIFEST_PREFIX + "{ts}"
+MANIFEST_KEY_FILE = MANIFEST_KEY_PREFIX + "{ts}"
+_MANIFEST_TABLES = {"manifest", "base_shas"}
+QueryResponse = Tuple[str, List["ManifestEntry"]]
 
 
 class ManifestEntry:
@@ -52,29 +52,29 @@ class ManifestEntry:
         self.commit_timestamp = commit_timestamp
 
     @classmethod
-    def from_row(cls, row: sqlite3.Row) -> 'ManifestEntry':
-        """ Helper function to construct a ManifestEntry from the database """
+    def from_row(cls, row: sqlite3.Row) -> "ManifestEntry":
+        """Helper function to construct a ManifestEntry from the database"""
         return cls(
-            row['abs_file_name'],
-            row['sha'],
-            row['base_sha'],
-            row['uid'],
-            row['gid'],
-            row['mode'],
-            row['key_pair'],
-            row['base_key_pair'],
-            row['commit_timestamp'],
+            row["abs_file_name"],
+            row["sha"],
+            row["base_sha"],
+            row["uid"],
+            row["gid"],
+            row["mode"],
+            row["key_pair"],
+            row["base_key_pair"],
+            row["commit_timestamp"],
         )
 
 
 class Manifest:
-    """ A sqlite3 manifest listing all of the files tracked in the backup
+    """A sqlite3 manifest listing all of the files tracked in the backup
 
     ::note: empty directories are ignored by the manifest
     """
 
     def __init__(self, manifest_filename: str):
-        """ Connect to a manifest file and optionally initialize a new database """
+        """Connect to a manifest file and optionally initialize a new database"""
         self.filename = manifest_filename
         self._conn = sqlite3.connect(self.filename)
         self._conn.row_factory = sqlite3.Row
@@ -82,17 +82,19 @@ class Manifest:
         self.changed = False
 
         self._cursor.execute(
-            '''
+            """
             select name from sqlite_master
             where type ='table' and name not like 'sqlite_%'
-            '''
+            """
         )
         rows = self._cursor.fetchall()
-        tables = {r['name'] for r in rows}
+        tables = {r["name"] for r in rows}
         if tables and not (tables == _MANIFEST_TABLES):
-            raise BackupCorruptedError(f'The manifest does not have the right tables: {tables}')
+            raise BackupCorruptedError(
+                f"The manifest does not have the right tables: {tables}"
+            )
         elif not tables:
-            logger.info('This looks like a new manifest; initializing')
+            logger.info("This looks like a new manifest; initializing")
             self._create_manifest_tables()
 
     def get_entry(
@@ -100,7 +102,7 @@ class Manifest:
         abs_file_name: str,
         timestamp: Optional[int] = None,
     ) -> Optional[ManifestEntry]:
-        """ Get the contents of the manifest for the most recent version of a file
+        """Get the contents of the manifest for the most recent version of a file
 
         :param abs_file_name: the name of the file to reconstruct
         :param timestamp: the point in time for which we want to reconstruct the file
@@ -110,10 +112,10 @@ class Manifest:
 
         timestamp = timestamp or int(time.time())
         self._cursor.execute(
-            '''
+            """
             select * from manifest natural left join base_shas
             where abs_file_name=? and commit_timestamp<=? order by commit_timestamp
-            ''',
+            """,
             (abs_file_name, timestamp),
         )
         rows = self._cursor.fetchall()
@@ -125,15 +127,15 @@ class Manifest:
 
     def get_entries_by_sha(self, sha: str) -> List[ManifestEntry]:
         self._cursor.execute(
-            'select * from manifest natural left join base_shas where sha like ?',
-            (f'{sha}%',),
+            "select * from manifest natural left join base_shas where sha like ?",
+            (f"{sha}%",),
         )
         rows = self._cursor.fetchall()
         return [ManifestEntry.from_row(row) for row in rows]
 
     def search(
         self,
-        like: str = '',
+        like: str = "",
         before_timestamp: Optional[int] = None,
         after_timestamp: Optional[int] = None,
         file_limit: Optional[int] = None,
@@ -158,12 +160,12 @@ class Manifest:
         before_timestamp = before_timestamp or int(time.time())
         after_timestamp = after_timestamp or 0
         self._cursor.execute(
-            '''
+            """
             select * from manifest natural left join base_shas
             where abs_file_name like ? and commit_timestamp between ? and ?
             order by abs_file_name, commit_timestamp desc
-            ''',
-            (like_query, after_timestamp, before_timestamp)
+            """,
+            (like_query, after_timestamp, before_timestamp),
         )
 
         results: List[QueryResponse] = []
@@ -172,8 +174,8 @@ class Manifest:
             if file_limit and file_count >= file_limit:
                 break
 
-            abs_file_name, history, j = rows[i]['abs_file_name'], [], 0
-            while i + j < len(rows) and rows[i + j]['abs_file_name'] == abs_file_name:
+            abs_file_name, history, j = rows[i]["abs_file_name"], [], 0
+            while i + j < len(rows) and rows[i + j]["abs_file_name"] == abs_file_name:
                 if not history_limit or j < history_limit:
                     history.append(ManifestEntry.from_row(rows[i + j]))
                 j += 1
@@ -185,7 +187,7 @@ class Manifest:
         return results
 
     def insert_or_update(self, entry: ManifestEntry) -> None:
-        """ Insert a new entry into the manifest
+        """Insert a new entry into the manifest
 
         :param abs_file_name: the name of the file
         :param entry: the saved file metadata (we have to pass this in instead of re-creating
@@ -197,11 +199,11 @@ class Manifest:
         # for the same file/sha/uid/gid/mode in the manifest, so the "or replace"
         # here will handle the update
         self._cursor.execute(
-            '''
+            """
             insert or replace into manifest
             (abs_file_name, sha, uid, gid, mode, key_pair, commit_timestamp)
             values (?, ?, ?, ?, ?, ?, ?)
-            ''',
+            """,
             (
                 entry.abs_file_name,
                 entry.sha,
@@ -217,15 +219,15 @@ class Manifest:
         self._ensure_correct_key_pairs(entry.sha, entry.key_pair)
         if entry.base_sha:
             self._cursor.execute(
-                'insert or replace into base_shas (sha, base_sha, base_key_pair) values (?, ?, ?)',
+                "insert or replace into base_shas (sha, base_sha, base_key_pair) values (?, ?, ?)",
                 (entry.sha, entry.base_sha, entry.base_key_pair),
             )
         else:
-            self._cursor.execute('delete from base_shas where sha=?', (entry.sha,))
+            self._cursor.execute("delete from base_shas where sha=?", (entry.sha,))
         self._commit()
 
     def delete(self, abs_file_name: str) -> None:
-        """ Mark that a file has been deleted
+        """Mark that a file has been deleted
 
         Note that we don't actually remove the file from the manifest in case we want to restore it
         later, we just insert a record with an empty ManifestEntry field.
@@ -234,18 +236,18 @@ class Manifest:
         """
 
         if not self.get_entry(abs_file_name):
-            logger.warn('Trying to delete untracked file; nothing written to datastore')
+            logger.warn("Trying to delete untracked file; nothing written to datastore")
             return
 
         commit_timestamp = int(time.time())
         self._cursor.execute(
-            'insert into manifest (abs_file_name, commit_timestamp) values (?, ?)',
+            "insert into manifest (abs_file_name, commit_timestamp) values (?, ?)",
             (abs_file_name, commit_timestamp),
         )
         self._commit()
 
     def files(self, timestamp: Optional[int] = None) -> Set[str]:
-        """ Return all of the (currently-existing) files in the manifest at or before the
+        """Return all of the (currently-existing) files in the manifest at or before the
         specified time
 
         :param timestamp: the most recent commit timestamp to consider in the manifest
@@ -253,66 +255,66 @@ class Manifest:
         """
         timestamp = timestamp or int(time.time())
         self._cursor.execute(
-            '''
+            """
             select abs_file_name, max(commit_timestamp) from manifest
             where commit_timestamp <=?
             group by abs_file_name having sha not null
-            ''',
+            """,
             (timestamp,),
         )
-        return set(row['abs_file_name'] for row in self._cursor.fetchall())
+        return set(row["abs_file_name"] for row in self._cursor.fetchall())
 
     def find_duplicate_entries(self) -> List[ManifestEntry]:
         self._cursor.execute(
-            '''
+            """
             select * from manifest natural left join base_shas
             where (abs_file_name, sha, uid, gid, mode) in (
                 select abs_file_name, sha, uid, gid, mode from manifest
                 where sha is not null
                 group by abs_file_name, sha, uid, gid, mode having count(*) > 1
             )
-            '''
+            """
         )
         rows = self._cursor.fetchall()
         return [ManifestEntry.from_row(row) for row in rows]
 
     def find_shas_with_multiple_key_pairs(self) -> List[ManifestEntry]:
         self._cursor.execute(
-            '''
+            """
             select * from manifest natural left join base_shas
             where sha in (
                 select sha from manifest
                 where sha is not null
                 group by sha having count(distinct key_pair) > 1
             )
-            '''
+            """
         )
         rows = self._cursor.fetchall()
         return [ManifestEntry.from_row(row) for row in rows]
 
     def delete_entry(self, entry: ManifestEntry):
         logger.warning(
-            f'DELETING ENTRY ({entry.abs_file_name}, {entry.sha}, {entry.commit_timestamp}) '
-            'FROM MANIFEST!!! THIS IS A DANGEROUS OPERATION!!!',
+            f"DELETING ENTRY ({entry.abs_file_name}, {entry.sha}, {entry.commit_timestamp}) "
+            "FROM MANIFEST!!! THIS IS A DANGEROUS OPERATION!!!",
         )
         self._cursor.execute(
-            '''
+            """
             delete from manifest
             where abs_file_name=? and sha=? and commit_timestamp=?
-            ''',
-            (entry.abs_file_name, entry.sha, entry.commit_timestamp)
+            """,
+            (entry.abs_file_name, entry.sha, entry.commit_timestamp),
         )
         self._commit()
 
     def _commit(self):
-        """ Commit the data to the database, and mark that the database has changed """
+        """Commit the data to the database, and mark that the database has changed"""
         self._conn.commit()
         self.changed = True
 
     def _create_manifest_tables(self):
-        """ Initialize a new manifest """
+        """Initialize a new manifest"""
         self._cursor.execute(
-            '''
+            """
             create table manifest (
                 abs_file_name text not null,
                 sha text,
@@ -322,37 +324,43 @@ class Manifest:
                 key_pair blob,
                 commit_timestamp integer not null
             )
-            '''
+            """
         )
         self._cursor.execute(
-            '''
+            """
             create table base_shas (
                 sha text not null unique,
                 base_sha text not null,
                 base_key_pair blob not null,
                 foreign key(sha) references manifest(sha)
             )
-            '''
+            """
         )
-        self._cursor.execute('create index mfst_idx on manifest(abs_file_name, commit_timestamp)')
         self._cursor.execute(
-            'create unique index mfst_unique_idx on manifest(abs_file_name, sha, uid, gid, mode)',
+            "create index mfst_idx on manifest(abs_file_name, commit_timestamp)"
         )
-        self._cursor.execute('create index sha_idx on manifest(sha)')
+        self._cursor.execute(
+            "create unique index mfst_unique_idx on manifest(abs_file_name, sha, uid, gid, mode)",
+        )
+        self._cursor.execute("create index sha_idx on manifest(sha)")
 
         self._commit()
 
     def _ensure_correct_key_pairs(self, sha: str, key_pair: bytes):
-        self._cursor.execute('select * from manifest where sha=? and key_pair!=?', (sha, key_pair))
+        self._cursor.execute(
+            "select * from manifest where sha=? and key_pair!=?", (sha, key_pair)
+        )
         rows = self._cursor.fetchall()
         if len(rows) > 0:
             logger.warning(
-                f'Found {len(rows)} entries for {sha} with invalid key pair; '
-                'force-updating to the good key-pair.'
+                f"Found {len(rows)} entries for {sha} with invalid key pair; "
+                "force-updating to the good key-pair."
             )
-            self._cursor.execute('update manifest set key_pair=? where sha=?', (key_pair, sha))
             self._cursor.execute(
-                'update base_shas set base_key_pair=? where base_sha=?',
+                "update manifest set key_pair=? where sha=?", (key_pair, sha)
+            )
+            self._cursor.execute(
+                "update base_shas set base_key_pair=? where base_sha=?",
                 (key_pair, sha),
             )
 
@@ -362,7 +370,7 @@ def get_manifest_keypair(
     private_key_filename: str,
     load: Callable[[str, IOIter], IOIter],
 ) -> bytes:
-    ts = manifest_filename.split('.', 1)[1]
+    ts = manifest_filename.split(".", 1)[1]
     with IOIter() as manifest_key:
         # the key is not large enough to worry about chunked reads, so just do it all at once
         load(MANIFEST_KEY_FILE.format(ts=ts), manifest_key)
@@ -377,7 +385,7 @@ def unlock_manifest(
     load: Callable[[str, IOIter], IOIter],
     options: OptionsDict,
 ) -> Manifest:
-    """ Load a manifest into local storage and unencrypt it
+    """Load a manifest into local storage and unencrypt it
 
     :param manifest_filename: the name of the manifest to unlock
     :param private_key_filename: the private key file in PEM format used to encrypt the
@@ -387,16 +395,18 @@ def unlock_manifest(
     :returns: the requested Manifest
     """
     local_manifest_filename = path_join(get_scratch_dir(), manifest_filename)
-    logger.debug(f'Unlocking manifest at {local_manifest_filename}')
+    logger.debug(f"Unlocking manifest at {local_manifest_filename}")
 
     # First use the private key to read the AES key and nonce used to encrypt the manifest
-    key_pair = b''
-    if options['use_encryption']:
+    key_pair = b""
+    if options["use_encryption"]:
         key_pair = get_manifest_keypair(manifest_filename, private_key_filename, load)
 
     # Now use the key and nonce to decrypt the manifest
-    with IOIter() as encrypted_local_manifest, \
-            IOIter(local_manifest_filename, check_mtime=False) as local_manifest:
+    with (
+        IOIter() as encrypted_local_manifest,
+        IOIter(local_manifest_filename, check_mtime=False) as local_manifest,
+    ):
         load(manifest_filename, encrypted_local_manifest)
         decrypt_and_unpack(encrypted_local_manifest, local_manifest, key_pair, options)
 
@@ -410,7 +420,7 @@ def lock_manifest(
     load: Callable[[str, IOIter], IOIter],
     options: OptionsDict,
 ) -> None:
-    """ Save a manifest from local storage to the backup store
+    """Save a manifest from local storage to the backup store
 
     :param manifest: the manifest object to save
     :param private_key_filename: the private key file in PEM format used to encrypt the
@@ -422,22 +432,28 @@ def lock_manifest(
 
     timestamp = time.time()
     local_manifest_filename = manifest.filename
-    logger.debug(f'Locking manifest at {local_manifest_filename}')
+    logger.debug(f"Locking manifest at {local_manifest_filename}")
 
     # First generate a new key and nonce to encrypt the manifest
     key_pair = generate_key_pair(options)
 
     # Next, use that key and nonce to encrypt and save the manifest
     new_manifest_filename = MANIFEST_FILE.format(ts=timestamp)
-    with IOIter(local_manifest_filename) as local_manifest, \
-            IOIter(local_manifest_filename + '.enc') as encrypted_manifest:
-        signature = compress_and_encrypt(local_manifest, encrypted_manifest, key_pair, options)
+    with (
+        IOIter(local_manifest_filename) as local_manifest,
+        IOIter(local_manifest_filename + ".enc") as encrypted_manifest,
+    ):
+        signature = compress_and_encrypt(
+            local_manifest, encrypted_manifest, key_pair, options
+        )
         save(encrypted_manifest, new_manifest_filename)
 
     # Finally, save the manifest key/nonce along with its HMAC using the user's private key
-    if options['use_encryption']:
-        with IOIter(local_manifest_filename + '.key') as new_manifest_key:
-            new_manifest_key.fd.write(encrypt_and_sign(key_pair + signature, private_key_filename))
+    if options["use_encryption"]:
+        with IOIter(local_manifest_filename + ".key") as new_manifest_key:
+            new_manifest_key.fd.write(
+                encrypt_and_sign(key_pair + signature, private_key_filename)
+            )
             new_manifest_key.fd.seek(0)
             save(new_manifest_key, MANIFEST_KEY_FILE.format(ts=timestamp))
 
@@ -445,7 +461,7 @@ def lock_manifest(
         unlock_manifest(new_manifest_filename, private_key_filename, load, options)
     except Exception:
         logger.critical(
-            'The saved manifest could not be decrypted!  '
-            'The contents of the most recent backup is inaccessible!'
+            "The saved manifest could not be decrypted!  "
+            "The contents of the most recent backup is inaccessible!"
         )
         raise

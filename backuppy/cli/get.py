@@ -10,7 +10,7 @@ from backuppy.stores import get_backup_store
 from backuppy.stores.backup_store import BackupStore
 from backuppy.util import sha_to_path
 
-ACTIONS = ['fetch', 'decrypt', 'unpack']
+ACTIONS = ["fetch", "decrypt", "unpack"]
 
 
 def _get(
@@ -19,15 +19,17 @@ def _get(
     backup_store: BackupStore,
     action,
 ) -> None:
-    print(f'Fetching {filename}...')
+    print(f"Fetching {filename}...")
     with IOIter() as encrypted_local_file, IOIter(filename) as local_file:
-        if action == 'fetch':
-            options = {'use_encryption': False, 'use_compression': False}
-        elif action == 'decrypt':
-            options = {'use_compression': False}
+        if action == "fetch":
+            options = {"use_encryption": False, "use_compression": False}
+        elif action == "decrypt":
+            options = {"use_compression": False}
         else:
             options = {}
-        to_fetch = filename if filename.startswith(MANIFEST_PREFIX) else sha_to_path(filename)
+        to_fetch = (
+            filename if filename.startswith(MANIFEST_PREFIX) else sha_to_path(filename)
+        )
         backup_store._load(to_fetch, encrypted_local_file)
         decrypt_and_unpack(
             encrypted_local_file,
@@ -35,12 +37,12 @@ def _get(
             key_pair,
             {**backup_store.options, **options},  # type: ignore
         )
-    print('Done!\n')
+    print("Done!\n")
 
 
 def main(args: argparse.Namespace) -> None:
     if args.sha is not None and args.manifest is not None:
-        raise ValueError('Cannot specify both SHA and manifest')
+        raise ValueError("Cannot specify both SHA and manifest")
 
     backup_store = get_backup_store(args.name)
 
@@ -48,7 +50,7 @@ def main(args: argparse.Namespace) -> None:
         if args.sha:
             entries = backup_store.manifest.get_entries_by_sha(args.sha)
             if not entries:
-                raise ValueError(f'Sha {args.sha} does not match anything in the store')
+                raise ValueError(f"Sha {args.sha} does not match anything in the store")
 
             # All the entries corresponding to this sha should be the same, so just use
             # the first one
@@ -56,35 +58,41 @@ def main(args: argparse.Namespace) -> None:
         else:
             # Retrieve the manifest instead of a specific file; we don't call unlock_manifest
             # here so that we can have control over the action
-            filename = sorted(backup_store._query(MANIFEST_PREFIX), reverse=True)[args.manifest]
-            filename = filename.removeprefix('/')
-            private_key_filename = backup_store.config.read('private_key_filename', default='')
-            key_pair = get_manifest_keypair(filename, private_key_filename, backup_store._load)
+            filename = sorted(backup_store._query(MANIFEST_PREFIX), reverse=True)[
+                args.manifest
+            ]
+            filename = filename.removeprefix("/")
+            private_key_filename = backup_store.config.read(
+                "private_key_filename", default=""
+            )
+            key_pair = get_manifest_keypair(
+                filename, private_key_filename, backup_store._load
+            )
         _get(filename, key_pair, backup_store, args.action)
 
 
-HELP_TEXT = '''
+HELP_TEXT = """
 WARNING: this command is considered "plumbing" and should be used for debugging or
 exceptional cases only.  You can render your backup store inaccessible if it is used
 incorrectly.  Use at your own risk!
-'''
+"""
 
 
-@subparser('get', HELP_TEXT, main)
+@subparser("get", HELP_TEXT, main)
 def add_get_parser(subparser) -> None:  # pragma: no cover
     add_name_arg(subparser)
     subparser.add_argument(
-        '--sha',
-        help='Restore the file corresponding to this SHA',
+        "--sha",
+        help="Restore the file corresponding to this SHA",
     )
     subparser.add_argument(
-        '--manifest',
+        "--manifest",
         type=int,
-        help='Retrieve a manifest from the backup store, index from 0 (most recent) to n (oldest)',
+        help="Retrieve a manifest from the backup store, index from 0 (most recent) to n (oldest)",
     )
     subparser.add_argument(
-        '--action',
+        "--action",
         choices=ACTIONS,
-        default='unpack',
-        help='Actions to take on the retrieved file',
+        default="unpack",
+        help="Actions to take on the retrieved file",
     )

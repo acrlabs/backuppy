@@ -26,18 +26,18 @@ test_file_history = dict()  # type: ignore
 RESTORE_ARGS = argparse.Namespace(
     disable_compression=True,
     disble_encryption=True,
-    before='now',
+    before="now",
     config=ITEST_CONFIG,
     dest=RESTORE_DIR,
-    name='data1_backup',
+    name="data1_backup",
     sha=None,
-    like='',
+    like="",
     preserve_scratch_dir=True,
     yes=False,
 )
 
 
-@pytest.fixture(autouse=True, scope='module')
+@pytest.fixture(autouse=True, scope="module")
 def init():
     clean_up_temp_directories()
 
@@ -46,7 +46,9 @@ def init():
 def clear_restore():
     try:
         rmtree(RESTORE_DIR)
-        time.sleep(1)  # give the filesystem some time to catch up since we do this for every test
+        time.sleep(
+            1
+        )  # give the filesystem some time to catch up since we do this for every test
     except FileNotFoundError:
         pass
 
@@ -70,11 +72,11 @@ def assert_backup_store_correct():
         latest = history[-1]
 
         manifest_cursor.execute(
-            'select * from manifest where abs_file_name=? order by commit_timestamp',
+            "select * from manifest where abs_file_name=? order by commit_timestamp",
             (os.path.abspath(latest.path),),
         )
         rows = manifest_cursor.fetchall()
-        if 'dont_back_me_up' in path:
+        if "dont_back_me_up" in path:
             assert len(rows) == 0
             continue
         else:
@@ -82,11 +84,13 @@ def assert_backup_store_correct():
             [deduped_history.append(i) for i in history if i not in deduped_history]
             assert len(rows) == len(deduped_history)
             for row in rows:
-                assert (row['sha'], row['mode']) in [(e.sha, e.mode) for e in deduped_history]
+                assert (row["sha"], row["mode"]) in [
+                    (e.sha, e.mode) for e in deduped_history
+                ]
 
         if latest.backup_path:
             manifest_cursor.execute(
-                'select * from base_shas where sha=?',
+                "select * from base_shas where sha=?",
                 (latest.sha,),
             )
             row = manifest_cursor.fetchone()
@@ -94,7 +98,9 @@ def assert_backup_store_correct():
                 if not row or not row[1]:
                     assert n.fd.read() == latest.contents
                 else:
-                    orig_file_path = path_join(BACKUP_DIR, row[1][:2], row[1][2:4], row[1][4:])
+                    orig_file_path = path_join(
+                        BACKUP_DIR, row[1][:2], row[1][2:4], row[1][4:]
+                    )
                     with IOIter(orig_file_path) as o, IOIter() as tmp:
                         apply_diff(o, n, tmp)
                         tmp.fd.seek(0)
@@ -102,9 +108,9 @@ def assert_backup_store_correct():
 
 
 def assert_restore_correct():
-    itest_restore_root = os.path.join(RESTORE_DIR, 'data1_backup')
+    itest_restore_root = os.path.join(RESTORE_DIR, "data1_backup")
     for f in file_walker(itest_restore_root):
-        abs_file_name = f[f.find(itest_restore_root) + len(itest_restore_root):]
+        abs_file_name = f[f.find(itest_restore_root) + len(itest_restore_root) :]
         with open(f) as restore_file, open(abs_file_name) as orig_file:
             assert restore_file.read() == orig_file.read()
 
@@ -125,12 +131,12 @@ def check_backup_restore(dry_run):
 def initial_backup_files():
     with itest_setup(
         test_file_history,
-        _TestFileData('foo', 'asdf'),
-        _TestFileData('bar', 'hjkl'),
-        _TestFileData('baz/buz', 'qwerty'),
-        _TestFileData('dont_back_me_up_1', 'secrets!'),
-        _TestFileData('baz/dont_back_me_up_2', 'moar secrets!'),
-        _TestFileData('fizzbuzz', 'I am a walrus', data_dir_index=1),
+        _TestFileData("foo", "asdf"),
+        _TestFileData("bar", "hjkl"),
+        _TestFileData("baz/buz", "qwerty"),
+        _TestFileData("dont_back_me_up_1", "secrets!"),
+        _TestFileData("baz/dont_back_me_up_2", "moar secrets!"),
+        _TestFileData("fizzbuzz", "I am a walrus", data_dir_index=1),
     ):
         yield
 
@@ -145,8 +151,8 @@ def unchanged():
 def contents_changed():
     with itest_setup(
         test_file_history,
-        _TestFileData('foo', 'adz foobar'),
-        _TestFileData('bar', 'hhhhh'),
+        _TestFileData("foo", "adz foobar"),
+        _TestFileData("bar", "hhhhh"),
     ):
         yield
 
@@ -155,7 +161,7 @@ def contents_changed():
 def file_deleted():
     with itest_setup(
         test_file_history,
-        _TestFileData('foo', None),
+        _TestFileData("foo", None),
     ):
         yield
 
@@ -164,7 +170,7 @@ def file_deleted():
 def file_restored():
     with itest_setup(
         test_file_history,
-        _TestFileData('foo', 'adz foobar'),
+        _TestFileData("foo", "adz foobar"),
     ):
         yield
 
@@ -173,7 +179,7 @@ def file_restored():
 def mode_changed():
     with itest_setup(
         test_file_history,
-        _TestFileData('foo', 'adz foobar', mode=0o100755),
+        _TestFileData("foo", "adz foobar", mode=0o100755),
     ):
         yield
 
@@ -182,7 +188,7 @@ def mode_changed():
 def contents_changed_after_delete():
     with itest_setup(
         test_file_history,
-        _TestFileData('foo', 'adfoo blah blah blah blah blah'),
+        _TestFileData("foo", "adfoo blah blah blah blah blah"),
     ):
         yield
 
@@ -191,7 +197,7 @@ def contents_changed_after_delete():
 def new_file_same_contents():
     with itest_setup(
         test_file_history,
-        _TestFileData('new_file', 'adz foobar'),  # this points at a diff
+        _TestFileData("new_file", "adz foobar"),  # this points at a diff
     ):
         yield
 
@@ -200,23 +206,26 @@ def new_file_same_contents():
 def old_file_same_contents():
     with itest_setup(
         test_file_history,
-        _TestFileData('bar', 'I am a walrus'),  # this points at an original
+        _TestFileData("bar", "I am a walrus"),  # this points at an original
     ):
         yield
 
 
-@pytest.mark.parametrize('dry_run', [True, False])
-@pytest.mark.parametrize('fixture', [
-    initial_backup_files,
-    unchanged,
-    contents_changed,
-    file_deleted,
-    file_restored,
-    mode_changed,
-    contents_changed_after_delete,
-    new_file_same_contents,
-    old_file_same_contents,
-])
+@pytest.mark.parametrize("dry_run", [True, False])
+@pytest.mark.parametrize(
+    "fixture",
+    [
+        initial_backup_files,
+        unchanged,
+        contents_changed,
+        file_deleted,
+        file_restored,
+        mode_changed,
+        contents_changed_after_delete,
+        new_file_same_contents,
+        old_file_same_contents,
+    ],
+)
 def test_initial_backup(dry_run, fixture):
     with fixture():
         check_backup_restore(dry_run)

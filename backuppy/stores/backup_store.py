@@ -49,7 +49,7 @@ class BackupStore(metaclass=ABCMeta):
     _manifest: Optional[Manifest]
 
     def __init__(self, backup_name: str) -> None:
-        """ A BackupStore object controls all the reading and writing of data from a particular
+        """A BackupStore object controls all the reading and writing of data from a particular
         backup location (local, S3, ssh, etc)
 
         This is an abstract class that needs to be subclassed with a _save and _load function
@@ -85,24 +85,30 @@ class BackupStore(metaclass=ABCMeta):
 
         try:
             # make sure the private key for locking the backup exists _before_ we do any work :sweating:
-            private_key_filename = self.config.read('private_key_filename', default='')
-            if self.options['use_encryption'] and not os.path.exists(private_key_filename):
-                raise FileNotFoundError(f'private key file {private_key_filename} does not exist')
+            private_key_filename = self.config.read("private_key_filename", default="")
+            if self.options["use_encryption"] and not os.path.exists(
+                private_key_filename
+            ):
+                raise FileNotFoundError(
+                    f"private key file {private_key_filename} does not exist"
+                )
 
             manifests = sorted(self._query(MANIFEST_PREFIX))
             if not manifests:
                 logger.warning(
-                    '''
+                    """
                     ********************************************************************
                     This looks like a new backup location; if you are not expecting this
                     message, someone may be tampering with your backup!
                     ********************************************************************
-                    '''
+                    """
                 )
-                self._manifest = Manifest(os.path.join(
-                    get_scratch_dir(),
-                    MANIFEST_FILE.format(ts=time.time()),
-                ))
+                self._manifest = Manifest(
+                    os.path.join(
+                        get_scratch_dir(),
+                        MANIFEST_FILE.format(ts=time.time()),
+                    )
+                )
             else:
                 self._manifest = unlock_manifest(
                     manifests[-1],
@@ -125,7 +131,7 @@ class BackupStore(metaclass=ABCMeta):
         dry_run: bool = False,
         force_copy: bool = False,
     ) -> Optional[ManifestEntry]:
-        """ The main workhorse function; determine if a file has changed, and if so, back it up!
+        """The main workhorse function; determine if a file has changed, and if so, back it up!
 
         :param abs_file_name: the name of the file under consideration
         :param dry_run: whether to actually save any data or not
@@ -139,12 +145,16 @@ class BackupStore(metaclass=ABCMeta):
             # new copy; we make a copy here to ensure that the contents don't change while backing
             # the file up, and that we have the correct sha
             if force_copy or not curr_entry or not curr_entry.sha:
-                new_entry = self._write_copy(abs_file_name, new_sha, new_file, force_copy, dry_run)
+                new_entry = self._write_copy(
+                    abs_file_name, new_sha, new_file, force_copy, dry_run
+                )
 
             # If the file has been backed up, check to see if it's changed by comparing shas
             elif new_sha != curr_entry.sha:
-                if regex_search_list(abs_file_name, self.options['skip_diff_patterns']):
-                    new_entry = self._write_copy(abs_file_name, new_sha, new_file, False, dry_run)
+                if regex_search_list(abs_file_name, self.options["skip_diff_patterns"]):
+                    new_entry = self._write_copy(
+                        abs_file_name, new_sha, new_file, False, dry_run
+                    )
                 else:
                     new_entry = self._write_diff(
                         abs_file_name,
@@ -157,11 +167,11 @@ class BackupStore(metaclass=ABCMeta):
             # If the sha is the same but metadata on the file has changed, we just store the updated
             # metadata
             elif (
-                new_file.uid != curr_entry.uid or
-                new_file.gid != curr_entry.gid or
-                new_file.mode != curr_entry.mode
+                new_file.uid != curr_entry.uid
+                or new_file.gid != curr_entry.gid
+                or new_file.mode != curr_entry.mode
             ):
-                logger.info(f'Saving changed metadata for {abs_file_name}')
+                logger.info(f"Saving changed metadata for {abs_file_name}")
                 new_entry = ManifestEntry(
                     abs_file_name,
                     curr_entry.sha,
@@ -174,7 +184,7 @@ class BackupStore(metaclass=ABCMeta):
                 )
             else:
                 # we don't want to flood the log with all the files that haven't changed
-                logger.debug(f'{abs_file_name} is up to date!')
+                logger.debug(f"{abs_file_name} is up to date!")
 
             if new_entry and not dry_run:
                 self.manifest.insert_or_update(new_entry)
@@ -195,7 +205,7 @@ class BackupStore(metaclass=ABCMeta):
             self.load(entry.sha, restore_file, entry.key_pair)
 
     def save(self, src: IOIter, dest: str, key_pair: bytes) -> bytes:
-        """ Wrapper around the _save function that converts the SHA to a path and does encryption
+        """Wrapper around the _save function that converts the SHA to a path and does encryption
 
         :param src: the file to save
         :param dest: the name of the file to write to in the store
@@ -209,7 +219,9 @@ class BackupStore(metaclass=ABCMeta):
         filename = path_join(get_scratch_dir(), dest)
 
         with IOIter(filename) as encrypted_save_file:
-            signature = compress_and_encrypt(src, encrypted_save_file, key_pair, self.options)
+            signature = compress_and_encrypt(
+                src, encrypted_save_file, key_pair, self.options
+            )
             self._save(encrypted_save_file, dest)  # test_f1_crash_file_save
         os.remove(filename)
         return signature
@@ -220,7 +232,7 @@ class BackupStore(metaclass=ABCMeta):
         dest: IOIter,
         key_pair: Optional[bytes],
     ) -> IOIter:
-        """ Wrapper around the _load function that converts the SHA to a path """
+        """Wrapper around the _load function that converts the SHA to a path"""
         src = sha_to_path(src)
         with IOIter() as encrypted_load_file:
             self._load(src, encrypted_load_file)
@@ -229,13 +241,13 @@ class BackupStore(metaclass=ABCMeta):
         return dest
 
     def rotate_manifests(self) -> None:
-        max_versions = self.options['max_manifest_versions']
+        max_versions = self.options["max_manifest_versions"]
         if not max_versions:
             return  # this just means that there's no configured limit to the number of versions
 
         manifests = sorted(self._query(MANIFEST_PREFIX))
         for manifest in manifests[:-max_versions]:
-            ts = manifest.split('.', 1)[1]
+            ts = manifest.split(".", 1)[1]
             self._delete(manifest)
             self._delete(MANIFEST_KEY_FILE.format(ts=ts))
 
@@ -244,7 +256,7 @@ class BackupStore(metaclass=ABCMeta):
         dry_run: bool,
         preserve_scratch: bool,
     ) -> None:
-        """ Ensure that the backup store gets cleaned up appropriately before we shut down
+        """Ensure that the backup store gets cleaned up appropriately before we shut down
 
         :param dry_run: whether to actually save any data or not
         :param preserve_scratch: whether to clean up the scratch directory before we exit; mainly
@@ -254,11 +266,11 @@ class BackupStore(metaclass=ABCMeta):
             return
 
         if not self._manifest.changed:  # test_m1_crash_before_save
-            logger.info('No changes detected; nothing to do')
+            logger.info("No changes detected; nothing to do")
         elif not dry_run:
             lock_manifest(
                 self._manifest,
-                self.config.read('private_key_filename', default=''),
+                self.config.read("private_key_filename", default=""),
                 self._save,
                 self._load,
                 self.options,
@@ -277,11 +289,15 @@ class BackupStore(metaclass=ABCMeta):
         force_copy: bool,
         dry_run: bool,
     ) -> ManifestEntry:
-        logger.info(f'Saving a new copy of {abs_file_name}')
+        logger.info(f"Saving a new copy of {abs_file_name}")
 
         entry_data = None
         if not force_copy:
-            entry_data = self._find_existing_entry_data(new_sha)  # test_f3_file_changed_while_saving
+            entry_data = (
+                self._find_existing_entry_data(  # test_f3_file_changed_while_saving
+                    new_sha
+                )
+            )
         key_pair, base_sha, base_key_pair = entry_data or (
             generate_key_pair(self.options),
             None,
@@ -298,7 +314,9 @@ class BackupStore(metaclass=ABCMeta):
             base_key_pair,
         )
         if not dry_run and not entry_data:
-            signature = self.save(file_obj, new_entry.sha, key_pair)  # append the HMAC before writing to db
+            signature = self.save(
+                file_obj, new_entry.sha, key_pair
+            )  # append the HMAC before writing to db
             new_entry.key_pair = key_pair + signature
         return new_entry
 
@@ -310,7 +328,7 @@ class BackupStore(metaclass=ABCMeta):
         file_obj: IOIter,
         dry_run: bool,
     ) -> ManifestEntry:
-        logger.info(f'Saving a diff for {abs_file_name}')
+        logger.info(f"Saving a diff for {abs_file_name}")
 
         entry_data = self._find_existing_entry_data(new_sha)
         # If the current entry is itself a diff, get its base; otherwise, this
@@ -347,13 +365,19 @@ class BackupStore(metaclass=ABCMeta):
                         orig_file,
                         file_obj,
                         diff_file,
-                        self.options['discard_diff_percentage'],
+                        self.options["discard_diff_percentage"],
                     )
                 except DiffTooLargeException:
-                    logger.info('The computed diff was too large; saving a copy instead.')
-                    logger.info('(you can configure this threshold with the discard_diff_percentage option)')
+                    logger.info(
+                        "The computed diff was too large; saving a copy instead."
+                    )
+                    logger.info(
+                        "(you can configure this threshold with the discard_diff_percentage option)"
+                    )
                     file_obj.fd.seek(0)
-                    return self._write_copy(abs_file_name, new_sha, file_obj, False, dry_run)
+                    return self._write_copy(
+                        abs_file_name, new_sha, file_obj, False, dry_run
+                    )
 
                 new_entry.sha = new_sha
                 if not dry_run:
@@ -368,7 +392,7 @@ class BackupStore(metaclass=ABCMeta):
         entries = self.manifest.get_entries_by_sha(sha)
         if entries:
             assert len({e.key_pair for e in entries}) == 1
-            logger.debug('Found pre-existing sha in the manifest, using that data')
+            logger.debug("Found pre-existing sha in the manifest, using that data")
             return entries[0].key_pair, entries[0].base_sha, entries[0].base_key_pair
         else:
             return None
@@ -391,50 +415,54 @@ class BackupStore(metaclass=ABCMeta):
 
     @property
     def manifest(self) -> Manifest:
-        """ Wrapper around the manifest to make sure we've unlocked it in a
+        """Wrapper around the manifest to make sure we've unlocked it in a
         with unlock()... block
         """
         if not self._manifest:
-            raise ManifestLockedException('The manifest is currently locked')
+            raise ManifestLockedException("The manifest is currently locked")
         return self._manifest
 
     @property
     def options(self) -> OptionsDict:
         try:
-            options = self.config.read_list('options', default=[{}])[0]
+            options = self.config.read_list("options", default=[{}])[0]
         except IndexError:
             options = dict()
 
         return {**DEFAULT_OPTIONS, **options}  # type: ignore
 
 
-def _cleanup_and_exit(signum: int, frame: FrameType, dry_run: bool, preserve_scratch: bool) -> None:
-    """ Signal handler to safely clean up after Ctrl-C or SIGTERM; this minimizes the amount of
+def _cleanup_and_exit(
+    signum: int, frame: FrameType, dry_run: bool, preserve_scratch: bool
+) -> None:
+    """Signal handler to safely clean up after Ctrl-C or SIGTERM; this minimizes the amount of
     duplicate work we have to do in the event that we cancel the backup partway through
     """
 
     signal.signal(signum, signal.SIG_IGN)
-    logger.info(f'Received signal {signum}, cleaning up the backup store')
+    logger.info(f"Received signal {signum}, cleaning up the backup store")
 
     if _UNLOCKED_STORE:
         try:
             _UNLOCKED_STORE.do_cleanup(dry_run, preserve_scratch)
         except Exception as e:
-            logger.exception(f'Shutdown was requested, but there was an error cleaning up: {str(e)}')
+            logger.exception(
+                f"Shutdown was requested, but there was an error cleaning up: {str(e)}"
+            )
             sys.exit(1)
 
-    logger.info('Cleanup complete; shutting down')
+    logger.info("Cleanup complete; shutting down")
     sys.exit(0)
 
 
-def _register_unlocked_store(store: BackupStore, dry_run: bool, preserve_scratch: bool) -> None:
+def _register_unlocked_store(
+    store: BackupStore, dry_run: bool, preserve_scratch: bool
+) -> None:
     global _UNLOCKED_STORE
     _UNLOCKED_STORE = store
 
     sig_handler = partial(
-        _cleanup_and_exit,
-        dry_run=dry_run,
-        preserve_scratch=preserve_scratch
+        _cleanup_and_exit, dry_run=dry_run, preserve_scratch=preserve_scratch
     )
     for sig in _SIGNALS_TO_HANDLE:
         signal.signal(sig, sig_handler)
