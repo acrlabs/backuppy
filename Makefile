@@ -5,10 +5,10 @@ default: venv
 test:
 	mypy backuppy --ignore-missing-imports
 	docker build . -t test_image
-	docker run -it --init -v `pwd`:/code test_image /bin/bash -c "\
-		poetry run coverage erase && \
-		poetry run coverage run -m pytest tests && \
-		poetry run coverage report --show-missing --fail-under 90"
+	docker run -it --init -v `pwd`:/code:ro test_image /bin/bash -c "\
+		poetry run coverage erase --data-file /output/coverage && \
+		poetry run coverage run --data-file /output/coverage -m pytest tests && \
+		poetry run coverage report --data-file /output/coverage --show-missing --fail-under 90"
 
 itest:
 	pytest -svvx itests

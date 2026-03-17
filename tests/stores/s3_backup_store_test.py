@@ -51,8 +51,11 @@ def mock_backup_store():
         yield S3BackupStore(backup_name)
 
 
-def test_save(s3_client, mock_backup_store):
-    with IOIter("/scratch/foo") as input1, IOIter("/scratch/asdf/bar") as input2:
+def test_save(fs_path, s3_client, mock_backup_store):
+    with (
+        IOIter(f"{fs_path}/scratch/foo") as input1,
+        IOIter(f"{fs_path}/scratch/asdf/bar") as input2,
+    ):
         mock_backup_store._save(input1, "/foo")
         mock_backup_store._save(input2, "/asdf/bar")
     assert (
@@ -65,11 +68,11 @@ def test_save(s3_client, mock_backup_store):
     )
 
 
-def test_load(s3_client, mock_backup_store):
-    with IOIter("/restored_file") as output:
+def test_load(fs_path, s3_client, mock_backup_store):
+    with IOIter(f"{fs_path}/restored_file") as output:
         mock_backup_store._load("/foo", output)
 
-    with open("/restored_file") as f:
+    with open(f"{fs_path}/restored_file") as f:
         assert f.read() == "old boring content"
 
 
