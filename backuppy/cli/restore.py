@@ -1,9 +1,6 @@
 import argparse
 import os
 import time
-from typing import List
-from typing import Optional
-from typing import Tuple
 
 import staticconf
 from tabulate import tabulate
@@ -24,7 +21,7 @@ RESTORE_LIST_HEADERS = ["filename", "sha", "backup time"]
 SHA_LENGTH = 8
 
 
-def _parse_destination(dest_input: Optional[str], backup_name: str) -> Tuple[str, str]:
+def _parse_destination(dest_input: str | None, backup_name: str) -> tuple[str, str]:
     dest_input = dest_input or "."
     # don't use path_join here because it wipes out the './' prefix
     destination_str = os.path.join(dest_input, backup_name)
@@ -35,7 +32,7 @@ def _parse_destination(dest_input: Optional[str], backup_name: str) -> Tuple[str
 
 
 def _confirm_restore(
-    files_to_restore: List[ManifestEntry],
+    files_to_restore: list[ManifestEntry],
     destination: str,
     destination_str: str,
 ) -> bool:
@@ -64,7 +61,7 @@ def _confirm_restore(
 
 
 def _restore(
-    files_to_restore: List[ManifestEntry],
+    files_to_restore: list[ManifestEntry],
     destination: str,
     backup_store: BackupStore,
 ) -> None:
@@ -92,7 +89,7 @@ def main(args: argparse.Namespace) -> None:
     backup_store = get_backup_store(args.name)
 
     with backup_store.unlock(preserve_scratch=args.preserve_scratch_dir):
-        files_to_restore: List[ManifestEntry]
+        files_to_restore: list[ManifestEntry]
         if args.sha:
             files_to_restore = backup_store.manifest.get_entries_by_sha(args.sha)
             if not files_to_restore:

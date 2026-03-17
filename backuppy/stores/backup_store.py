@@ -8,10 +8,7 @@ from contextlib import contextmanager
 from functools import partial
 from shutil import rmtree
 from types import FrameType
-from typing import Iterator
-from typing import List
-from typing import Optional
-from typing import Tuple
+from collections.abc import Iterator
 
 import colorlog
 import staticconf
@@ -46,7 +43,7 @@ _SIGNALS_TO_HANDLE = (signal.SIGINT, signal.SIGTERM)
 
 class BackupStore(metaclass=ABCMeta):
     backup_name: str
-    _manifest: Optional[Manifest]
+    _manifest: Manifest | None
 
     def __init__(self, backup_name: str) -> None:
         """A BackupStore object controls all the reading and writing of data from a particular
@@ -130,7 +127,7 @@ class BackupStore(metaclass=ABCMeta):
         *,
         dry_run: bool = False,
         force_copy: bool = False,
-    ) -> Optional[ManifestEntry]:
+    ) -> ManifestEntry | None:
         """The main workhorse function; determine if a file has changed, and if so, back it up!
 
         :param abs_file_name: the name of the file under consideration
@@ -230,7 +227,7 @@ class BackupStore(metaclass=ABCMeta):
         self,
         src: str,
         dest: IOIter,
-        key_pair: Optional[bytes],
+        key_pair: bytes | None,
     ) -> IOIter:
         """Wrapper around the _load function that converts the SHA to a path"""
         src = sha_to_path(src)
@@ -388,7 +385,7 @@ class BackupStore(metaclass=ABCMeta):
     def _find_existing_entry_data(
         self,
         sha: str,
-    ) -> Optional[Tuple[bytes, Optional[str], Optional[bytes]]]:
+    ) -> tuple[bytes, str | None, bytes | None] | None:
         entries = self.manifest.get_entries_by_sha(sha)
         if entries:
             assert len({e.key_pair for e in entries}) == 1
@@ -406,7 +403,7 @@ class BackupStore(metaclass=ABCMeta):
         pass
 
     @abstractmethod
-    def _query(self, prefix: str) -> List[str]:  # pragma: no cover
+    def _query(self, prefix: str) -> list[str]:  # pragma: no cover
         pass
 
     @abstractmethod

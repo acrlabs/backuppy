@@ -1,6 +1,6 @@
 import argparse
 
-import mock
+from unittest import mock
 import pytest
 
 from backuppy.cli.get import _get

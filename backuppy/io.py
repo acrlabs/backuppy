@@ -3,9 +3,8 @@ import io
 import os
 from hashlib import sha256
 from tempfile import TemporaryFile
-from typing import Generator
+from collections.abc import Generator
 from typing import IO
-from typing import Optional
 
 import colorlog
 
@@ -22,7 +21,7 @@ class IOIter:
 
     def __init__(
         self,
-        filename: Optional[str] = None,
+        filename: str | None = None,
         block_size: int = BLOCK_SIZE,
         check_mtime: bool = True,
     ) -> None:
@@ -34,11 +33,11 @@ class IOIter:
         """
         self.filename = filename
         self.block_size = block_size
-        self._fd: Optional[IO[bytes]] = None
+        self._fd: IO[bytes] | None = None
         self._mode = "r+b"
-        self._sha_fn: Optional[_hashlib.HASH] = None
+        self._sha_fn: _hashlib.HASH | None = None
         self._should_check_mtime = check_mtime
-        self._enter_mtime: Optional[int] = None
+        self._enter_mtime: int | None = None
 
     def __enter__(self) -> "IOIter":
         """Context manager function to open the file (the file will be created if it doesn't exist)

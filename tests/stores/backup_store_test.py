@@ -2,7 +2,7 @@ import os
 import shutil
 import signal
 
-import mock
+from unittest import mock
 import pytest
 import staticconf.testing
 

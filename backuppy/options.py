@@ -1,13 +1,10 @@
-from typing import List
-from typing import Optional
-
-from mypy_extensions import TypedDict
+from typing import TypedDict
 
 
 class OptionsDict(TypedDict):
-    discard_diff_percentage: Optional[float]
-    max_manifest_versions: Optional[int]
-    skip_diff_patterns: List[str]
+    discard_diff_percentage: float | None
+    max_manifest_versions: int | None
+    skip_diff_patterns: list[str]
     use_encryption: bool
     use_compression: bool
 

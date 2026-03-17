@@ -1,7 +1,7 @@
 import argparse
 import re
 
-import mock
+from unittest import mock
 import pytest
 
 from backuppy.cli.list import _print_details

@@ -1,5 +1,4 @@
 from itertools import zip_longest
-from typing import Optional
 
 import bsdiff4
 import colorlog
@@ -64,7 +63,7 @@ def compute_diff(
     orig_file: IOIter,
     new_file: IOIter,
     diff_file: IOIter,
-    discard_diff_percentage: Optional[float] = None,
+    discard_diff_percentage: float | None = None,
 ) -> IOIter:
     """Given an open original file and a new file, compute the diff between the two
 

@@ -8,7 +8,7 @@ from contextlib import contextmanager
 from hashlib import sha256
 from shutil import rmtree
 
-import mock
+from unittest import mock
 import pytest
 
 from backuppy.config import setup_config

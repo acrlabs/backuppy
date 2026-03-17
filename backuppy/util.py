@@ -4,11 +4,9 @@ import sys
 from datetime import datetime
 from random import shuffle
 from tempfile import gettempdir
-from typing import Callable
-from typing import Generator
-from typing import List
-from typing import Optional
-from typing import Pattern
+from collections.abc import Callable
+from collections.abc import Generator
+from re import Pattern
 
 import colorlog
 import dateparser
@@ -41,15 +39,15 @@ def ask_for_confirmation(prompt: str, default: str = "y"):
             print('Unrecognized response; please enter "yes" or "no"')
 
 
-def compile_exclusions(exclusions: List[str]) -> List[Pattern]:
+def compile_exclusions(exclusions: list[str]) -> list[Pattern]:
     # deep-flattening the exclusions list makes it nicer to use YAML anchors
     return [re.compile(excl) for excl in deepflatten(exclusions, ignore=str)]
 
 
 def file_walker(
     path,
-    on_error: Optional[Callable] = None,
-    exclusions: Optional[List[Pattern]] = None,
+    on_error: Callable | None = None,
+    exclusions: list[Pattern] | None = None,
 ) -> Generator[str, None, None]:
     """Walk through all the files in a path and yield their names one-at-a-time,
     relative to the "path" value passed in.  The ordering of the returned files
@@ -100,7 +98,7 @@ def file_walker(
                 yield path_join(root, f)
 
 
-def format_sha(sha: str, sha_length: int) -> Optional[str]:
+def format_sha(sha: str, sha_length: int) -> str | None:
     return sha[:sha_length] + "..." if sha else None
 
 
@@ -112,7 +110,7 @@ def get_scratch_dir() -> str:
     return os.path.join(gettempdir(), "backuppy")
 
 
-def regex_search_list(needle: str, haystack: List[str]):
+def regex_search_list(needle: str, haystack: list[str]):
     for pattern in haystack:
         if re.search(pattern, needle):
             return True

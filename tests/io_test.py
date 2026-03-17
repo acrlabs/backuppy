@@ -3,7 +3,7 @@ import time
 from hashlib import sha256
 from tempfile import TemporaryFile
 
-import mock
+from unittest import mock
 import pytest
 
 from backuppy.exceptions import DoubleBufferError

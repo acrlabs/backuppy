@@ -1,7 +1,5 @@
 import logging
 import logging.handlers
-from typing import List
-from typing import Optional
 
 import colorlog
 
@@ -27,8 +25,8 @@ def _log_fns_for_level(log_level):
 
 def setup_logging(
     log_level_str: str = "info",
-    log_file: Optional[str] = None,
-    log_file_level_str: Optional[str] = None,
+    log_file: str | None = None,
+    log_file_level_str: str | None = None,
 ) -> None:
     global logger
     if not len(logger.handlers):
@@ -76,7 +74,7 @@ def setup_logging(
         logging.getLogger("boto3").setLevel(max(logging.INFO, log_level))
 
 
-def main(arg_list: Optional[List[str]] = None) -> None:
+def main(arg_list: list[str] | None = None) -> None:
     args = parse_args("BackupPY - an open-source backup tool", arg_list)
     setup_logging(args.log_level, args.log_file, args.log_file_level)
     setup_config(args.config)

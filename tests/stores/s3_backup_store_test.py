@@ -1,5 +1,5 @@
 import boto3
-import mock
+from unittest import mock
 import pytest
 import staticconf
 from moto import mock_aws

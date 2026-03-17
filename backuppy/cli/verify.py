@@ -1,8 +1,6 @@
 import argparse
 import os.path
 from collections import defaultdict
-from typing import Dict
-from typing import List
 
 import colorlog
 import staticconf
@@ -110,13 +108,13 @@ def _fix_shas_with_multiple_key_pairs(backup_store: BackupStore):
 
 
 def _verify(
-    entries: List[ManifestEntry], backup_store: BackupStore, show_all: bool
+    entries: list[ManifestEntry], backup_store: BackupStore, show_all: bool
 ) -> None:
     print("Beginning verification...")
 
     # Because we might be fixing things as we go, we need to keep track of what
     # we've fixed so we don't needlessly overwrite data
-    fixed_shas: Dict[str, bytes] = dict()
+    fixed_shas: dict[str, bytes] = dict()
     for entry in entries:
         check_str = f"Checking {entry.abs_file_name}..."
         if entry.sha in fixed_shas:
@@ -156,7 +154,7 @@ def main(args: argparse.Namespace) -> None:
     backup_store = get_backup_store(args.name)
 
     with backup_store.unlock(preserve_scratch=args.preserve_scratch_dir):
-        files_to_verify: List[ManifestEntry]
+        files_to_verify: list[ManifestEntry]
         if args.fast:
             _fast_verify(backup_store)
             return

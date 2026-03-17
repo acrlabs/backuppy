@@ -2,7 +2,7 @@ import shutil
 import os
 from io import BytesIO
 
-import mock
+from unittest import mock
 import pytest
 import staticconf.testing
 

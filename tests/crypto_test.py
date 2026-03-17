@@ -1,6 +1,6 @@
 import zlib
 
-import mock
+from unittest import mock
 import pytest
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives.asymmetric.rsa import generate_private_key

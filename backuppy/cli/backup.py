@@ -1,8 +1,6 @@
 import argparse
 import os
-from typing import List
-from typing import Pattern
-from typing import Set
+from re import Pattern
 
 import colorlog
 import staticconf
@@ -21,9 +19,9 @@ logger = colorlog.getLogger(__name__)
 def _scan_directory(
     abs_base_path: str,
     backup_store: BackupStore,
-    exclusions: List[Pattern],
+    exclusions: list[Pattern],
     dry_run: bool,
-) -> Set[str]:
+) -> set[str]:
     """scan a directory looking for changes from the manifest
 
     :param abs_base_path: the root of the directory to scan
@@ -63,7 +61,7 @@ def main(args: argparse.Namespace) -> None:
     with backup_store.unlock(
         dry_run=args.dry_run, preserve_scratch=args.preserve_scratch_dir
     ):
-        marked_files: Set[str] = set()
+        marked_files: set[str] = set()
         for base_path in staticconf.read_list("directories", namespace=args.name):  # type: ignore[attr-defined]
             abs_base_path = os.path.abspath(base_path)
             exclusions = compile_exclusions(

@@ -1,8 +1,6 @@
 import argparse
 import sys
-from typing import Callable
-from typing import List
-from typing import Optional
+from collections.abc import Callable
 
 import colorlog
 
@@ -66,7 +64,7 @@ def add_preserve_scratch_arg(
 
 def parse_args(
     description: str,
-    arg_list: Optional[List[str]],
+    arg_list: list[str] | None,
 ) -> argparse.Namespace:  # pragma: no cover
     """Set up parser for the CLI tool and any subcommands
 

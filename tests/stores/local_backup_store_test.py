@@ -1,6 +1,6 @@
 import os
 
-import mock
+from unittest import mock
 import pytest
 import staticconf.testing
 
@@ -34,10 +34,10 @@ def test_save(fs_path, caplog, mock_backup_store):
         mock_backup_store._save(input1, "/foo")
         mock_backup_store._save(input2, "/asdf/bar")
     assert os.path.exists(f"{fs_path}/fake/path/fake_backup/foo")
-    with open(f"{fs_path}/fake/path/fake_backup/foo", "r") as f:
+    with open(f"{fs_path}/fake/path/fake_backup/foo") as f:
         assert f.read() == "i'm a copy of foo"
     assert os.path.exists(f"{fs_path}/fake/path/fake_backup/asdf/bar")
-    with open(f"{fs_path}/fake/path/fake_backup/asdf/bar", "r") as f:
+    with open(f"{fs_path}/fake/path/fake_backup/asdf/bar") as f:
         assert f.read() == "i'm a copy of bar"
 
 

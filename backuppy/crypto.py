@@ -2,11 +2,9 @@ import os
 import zlib
 from itertools import chain
 from itertools import repeat
-from typing import Callable
+from collections.abc import Callable
 from typing import cast
-from typing import Generator
-from typing import Optional
-from typing import Tuple
+from collections.abc import Generator
 
 import colorlog
 from cryptography.exceptions import InvalidSignature
@@ -38,7 +36,7 @@ def identity(x: bytes) -> bytes:
 def compress_and_encrypt(
     input_file: IOIter,
     output_file: IOIter,
-    key_pair: Optional[bytes],
+    key_pair: bytes | None,
     options: OptionsDict,
 ) -> bytes:
     """Read data from an open file descriptor, and write the compressed, encrypted data to another
@@ -61,7 +59,7 @@ def compress_and_encrypt(
     )
     hmac = HMAC(key, SHA256(), default_backend())
 
-    def last_block() -> Generator[Tuple[bytes, bool], None, None]:
+    def last_block() -> Generator[tuple[bytes, bool], None, None]:
         yield (
             (compressobj.flush(), False) if options["use_compression"] else (b"", False)
         )
@@ -90,7 +88,7 @@ def compress_and_encrypt(
 def decrypt_and_unpack(
     input_file: IOIter,
     output_file: IOIter,
-    key_pair: Optional[bytes],
+    key_pair: bytes | None,
     options: OptionsDict,
 ) -> None:
     """Read encrypted, GZIPed data from an open file descriptor, and write the decoded data to

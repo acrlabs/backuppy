@@ -1,10 +1,6 @@
 import sqlite3
 import time
-from typing import Callable
-from typing import List
-from typing import Optional
-from typing import Set
-from typing import Tuple
+from collections.abc import Callable
 
 import colorlog
 
@@ -25,7 +21,7 @@ MANIFEST_KEY_PREFIX = "manifest-key."
 MANIFEST_FILE = MANIFEST_PREFIX + "{ts}"
 MANIFEST_KEY_FILE = MANIFEST_KEY_PREFIX + "{ts}"
 _MANIFEST_TABLES = {"manifest", "base_shas"}
-QueryResponse = Tuple[str, List["ManifestEntry"]]
+QueryResponse = tuple[str, list["ManifestEntry"]]
 
 
 class ManifestEntry:
@@ -33,12 +29,12 @@ class ManifestEntry:
         self,
         abs_file_name: str,
         sha: str,
-        base_sha: Optional[str],
+        base_sha: str | None,
         uid: int,
         gid: int,
         mode: int,
         key_pair: bytes,
-        base_key_pair: Optional[bytes],
+        base_key_pair: bytes | None,
         commit_timestamp: int = 0,  # provide a dummy value to be filled in at commit time
     ) -> None:
         self.abs_file_name = abs_file_name
@@ -100,8 +96,8 @@ class Manifest:
     def get_entry(
         self,
         abs_file_name: str,
-        timestamp: Optional[int] = None,
-    ) -> Optional[ManifestEntry]:
+        timestamp: int | None = None,
+    ) -> ManifestEntry | None:
         """Get the contents of the manifest for the most recent version of a file
 
         :param abs_file_name: the name of the file to reconstruct
@@ -125,7 +121,7 @@ class Manifest:
         latest_row = rows[-1]
         return ManifestEntry.from_row(latest_row)
 
-    def get_entries_by_sha(self, sha: str) -> List[ManifestEntry]:
+    def get_entries_by_sha(self, sha: str) -> list[ManifestEntry]:
         self._cursor.execute(
             "select * from manifest natural left join base_shas where sha like ?",
             (f"{sha}%",),
@@ -136,11 +132,11 @@ class Manifest:
     def search(
         self,
         like: str = "",
-        before_timestamp: Optional[int] = None,
-        after_timestamp: Optional[int] = None,
-        file_limit: Optional[int] = None,
-        history_limit: Optional[int] = None,
-    ) -> List[QueryResponse]:
+        before_timestamp: int | None = None,
+        after_timestamp: int | None = None,
+        file_limit: int | None = None,
+        history_limit: int | None = None,
+    ) -> list[QueryResponse]:
         """
         Search the manifest for files matching a particular pattern; if no values are given, return
         all files in the manifest
@@ -168,7 +164,7 @@ class Manifest:
             (like_query, after_timestamp, before_timestamp),
         )
 
-        results: List[QueryResponse] = []
+        results: list[QueryResponse] = []
         rows, i, file_count = self._cursor.fetchall(), 0, 0
         while i < len(rows):
             if file_limit and file_count >= file_limit:
@@ -246,7 +242,7 @@ class Manifest:
         )
         self._commit()
 
-    def files(self, timestamp: Optional[int] = None) -> Set[str]:
+    def files(self, timestamp: int | None = None) -> set[str]:
         """Return all of the (currently-existing) files in the manifest at or before the
         specified time
 
@@ -264,7 +260,7 @@ class Manifest:
         )
         return set(row["abs_file_name"] for row in self._cursor.fetchall())
 
-    def find_duplicate_entries(self) -> List[ManifestEntry]:
+    def find_duplicate_entries(self) -> list[ManifestEntry]:
         self._cursor.execute(
             """
             select * from manifest natural left join base_shas
@@ -278,7 +274,7 @@ class Manifest:
         rows = self._cursor.fetchall()
         return [ManifestEntry.from_row(row) for row in rows]
 
-    def find_shas_with_multiple_key_pairs(self) -> List[ManifestEntry]:
+    def find_shas_with_multiple_key_pairs(self) -> list[ManifestEntry]:
         self._cursor.execute(
             """
             select * from manifest natural left join base_shas

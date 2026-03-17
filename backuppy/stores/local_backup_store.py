@@ -1,6 +1,5 @@
 import os
 import shutil
-from typing import List
 
 import colorlog
 
@@ -49,12 +48,12 @@ class LocalBackupStore(BackupStore):
             io_copy(input_file, output_file)
         return output_file
 
-    def _query(self, prefix: str) -> List[str]:
+    def _query(self, prefix: str) -> list[str]:
         # self_rel_name returns things with a leading slash, but we don't necessary want to
         # require that for every possible prefix, so we add it here if it wasn't already present
         if prefix and prefix[0] != os.sep:
             prefix = os.sep + prefix
-        results: List[str] = []
+        results: list[str] = []
 
         for root, dirs, files in os.walk(self.backup_location):
             # look through all of the directories and see if any of them match the prefix;

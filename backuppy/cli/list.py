@@ -2,8 +2,6 @@ import argparse
 import os
 import stat
 import time
-from typing import List
-from typing import Tuple
 
 import staticconf
 from tabulate import tabulate
@@ -16,11 +14,11 @@ from backuppy.util import format_time
 from backuppy.util import parse_time
 
 DASHES = "-" * 80
-SUMMARY_HEADERS: List[str] = ["filename", "versions", "del?", "last backup time"]
-DETAILS_HEADERS: List[str] = ["sha", "uid", "gid", "permissions", "backup time"]
+SUMMARY_HEADERS: list[str] = ["filename", "versions", "del?", "last backup time"]
+DETAILS_HEADERS: list[str] = ["sha", "uid", "gid", "permissions", "backup time"]
 
 
-def _split_root_prefix(abs_file_name: str, backup_name: str) -> Tuple[str, str]:
+def _split_root_prefix(abs_file_name: str, backup_name: str) -> tuple[str, str]:
     for directory in staticconf.read_list("directories", namespace=backup_name):  # type: ignore[attr-defined]
         abs_root = os.path.abspath(directory) + os.path.sep
         if abs_file_name.startswith(abs_root):
@@ -30,11 +28,11 @@ def _split_root_prefix(abs_file_name: str, backup_name: str) -> Tuple[str, str]:
 
 def _print_summary(
     backup_name: str,
-    search_results: List[QueryResponse],
+    search_results: list[QueryResponse],
     deleted_only: bool,
     changed_only: bool,
 ) -> None:
-    contents: List[Tuple[str, int, str, str]] = []
+    contents: list[tuple[str, int, str, str]] = []
 
     for i, (abs_file_name, history) in enumerate(search_results):
         root_directory, filename = _split_root_prefix(search_results[i][0], backup_name)
@@ -62,7 +60,7 @@ def _print_summary(
 
 def _print_details(
     backup_name: str,
-    search_results: List[QueryResponse],
+    search_results: list[QueryResponse],
     deleted_only: bool,
     changed_only: bool,
     sha_length: int,
