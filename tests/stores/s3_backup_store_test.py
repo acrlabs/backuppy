@@ -1,5 +1,6 @@
-import boto3
 from unittest import mock
+
+import boto3
 import pytest
 import staticconf
 from moto import mock_aws
@@ -8,8 +9,8 @@ from backuppy.io import IOIter
 from backuppy.stores.s3_backup_store import DEEP_ARCHIVE_SIZE
 from backuppy.stores.s3_backup_store import GLACIER_SIZE
 from backuppy.stores.s3_backup_store import ONEZONE_IA_SIZE
-from backuppy.stores.s3_backup_store import S3BackupStore
 from backuppy.stores.s3_backup_store import STANDARD_IA_SIZE
+from backuppy.stores.s3_backup_store import S3BackupStore
 
 
 @pytest.fixture
@@ -24,6 +25,7 @@ def s3_client():
     client.put_object(Bucket="test_bucket", Key="/foo", Body="old boring content")
     client.put_object(Bucket="test_bucket", Key="/biz/baz", Body="old boring content 2")
     client.put_object(Bucket="test_bucket", Key="/fuzz/buzz", Body="old boring content 3")
+    client.put_object(Bucket="test_bucket", Key="/glacier/boi", Body="brrrrrr", StorageClass="GLACIER")
     yield client
     mock_s3_obj.stop()
 
@@ -68,8 +70,22 @@ def test_load(fs_path, s3_client, mock_backup_store):
         assert f.read() == "old boring content"
 
 
+def test_load_glacier(fs_path, s3_client, mock_backup_store):
+    with IOIter(f"{fs_path}/restored_file") as output:
+        res = mock_backup_store._load("/glacier/boi", output)
+    assert res is None
+    with open(f"{fs_path}/restored_file") as f:
+        assert f.read() == ""
+
+    # moto immediately moves it to "ready", so this time it should succeed
+    with IOIter(f"{fs_path}/restored_file") as output:
+        res = mock_backup_store._load("/glacier/boi", output)
+    with open(f"{fs_path}/restored_file") as f:
+        assert f.read() == "brrrrrr"
+
+
 def test_query(s3_client, mock_backup_store):
-    assert set(mock_backup_store._query("")) == {"/foo", "/biz/baz", "/fuzz/buzz"}
+    assert set(mock_backup_store._query("")) == {"/foo", "/biz/baz", "/fuzz/buzz", "/glacier/boi"}
 
 
 def test_query_2(s3_client, mock_backup_store):

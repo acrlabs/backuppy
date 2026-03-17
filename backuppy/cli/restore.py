@@ -36,7 +36,7 @@ def _confirm_restore(
     destination: str,
     destination_str: str,
 ) -> bool:
-    print("")
+    print()
     if os.path.exists(destination):
         print(f"WARNING: {destination_str} already exists.  Files in this location may be overwritten.")
     print(f"Backuppy will restore the following files to {destination_str}:\n")
@@ -53,7 +53,7 @@ def _confirm_restore(
             headers=RESTORE_LIST_HEADERS,
         )
     )
-    print("")
+    print()
     return ask_for_confirmation("Continue?")
 
 
@@ -73,7 +73,10 @@ def _restore(
             IOIter() as diff_file,
             IOIter(restore_file_name) as restore_file,
         ):
-            backup_store.restore_entry(f, orig_file, diff_file, restore_file)
+            try:
+                backup_store.restore_entry(f, orig_file, diff_file, restore_file)
+            except Exception as e:
+                print(f"could not restore {stripped_abs_file_name}, continuing: {e}")
 
     print("Restore complete!\n")
 

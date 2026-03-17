@@ -1,20 +1,21 @@
 import os
 import shutil
 import signal
-
 from unittest import mock
+
 import pytest
 import staticconf.testing
 
+from backuppy.exceptions import BackupReadFailedException
 from backuppy.exceptions import DiffTooLargeException
 from backuppy.exceptions import ManifestLockedException
 from backuppy.manifest import Manifest
 from backuppy.manifest import ManifestEntry
+from backuppy.stores.backup_store import _SIGNALS_TO_HANDLE
+from backuppy.stores.backup_store import BackupStore
 from backuppy.stores.backup_store import _cleanup_and_exit
 from backuppy.stores.backup_store import _register_unlocked_store
-from backuppy.stores.backup_store import _SIGNALS_TO_HANDLE
 from backuppy.stores.backup_store import _unregister_store
-from backuppy.stores.backup_store import BackupStore
 from backuppy.util import get_scratch_dir
 
 
@@ -185,19 +186,42 @@ def test_restore_entry(backup_store, base_sha, current_entry):
     current_entry.base_sha = base_sha
     if base_sha:
         current_entry.base_key_pair = b"2222"
-        orig_file, diff_file, restore_file = (
-            mock.MagicMock(),
-            mock.MagicMock(),
-            mock.MagicMock(),
-        )
+    orig_file, diff_file, restore_file = (
+        mock.MagicMock(),
+        mock.MagicMock(),
+        mock.MagicMock(),
+    )
+    with mock.patch("backuppy.stores.backup_store.apply_diff") as mock_apply_diff:
         backup_store.restore_entry(current_entry, orig_file, diff_file, restore_file)
         if base_sha:
-            assert backup_store.load.call_args_list[0] == mock.call(base_sha, orig_file, b"2222")
-        assert backup_store.load.call_args_list[-1] == mock.call(
-            "abcdef123",
-            diff_file,
-            b"aaaaa2222",
-        )
+            assert mock_apply_diff.call_count == 1
+        else:
+            assert mock_apply_diff.call_count == 0
+
+    if base_sha:
+        assert backup_store.load.call_args_list[0] == mock.call(base_sha, orig_file, b"2222")
+        assert backup_store.load.call_args_list[-1] == mock.call("abcdef123", diff_file, b"aaaaa2222")
+    else:
+        assert backup_store.load.call_args_list[-1] == mock.call("abcdef123", restore_file, b"aaaaa2222")
+
+
+@pytest.mark.parametrize("base_sha", [None, "ffffffff"])
+def test_restore_entry_fails(backup_store, base_sha, current_entry):
+    current_entry.base_sha = base_sha
+    if base_sha:
+        current_entry.base_key_pair = b"2222"
+    orig_file, diff_file, restore_file = (
+        mock.MagicMock(),
+        mock.MagicMock(),
+        mock.MagicMock(),
+    )
+    backup_store.load.return_value = None
+    with (
+        mock.patch("backuppy.stores.backup_store.apply_diff") as mock_apply_diff,
+        pytest.raises(BackupReadFailedException),
+    ):
+        backup_store.restore_entry(current_entry, orig_file, diff_file, restore_file)
+        assert mock_apply_diff.call_count == 0
 
 
 @pytest.mark.no_mocksaveload
@@ -321,6 +345,28 @@ def test_write_diff(backup_store, current_entry, base_sha, dry_run, caplog):
     assert entry.base_key_pair == (b"bbbbb3333" if base_sha else b"aaaaa2222")
     assert backup_store.save.call_count == int(not dry_run)
     assert "Saving a diff for /foo" in caplog.text
+
+
+@pytest.mark.parametrize("dry_run", [True, False])
+def test_write_diff_unreadable(backup_store, current_entry, dry_run, caplog):
+    with (
+        mock.patch("backuppy.stores.backup_store.generate_key_pair", return_value=b"11111"),
+    ):
+        backup_store.load.return_value = None
+        entry = backup_store._write_diff(
+            "/foo",
+            "12345678",
+            current_entry,
+            mock.MagicMock(),
+            dry_run,
+        )
+    assert entry.sha == "12345678"
+    assert entry.base_sha is None
+    # no signature computed in dry-run mode
+    assert entry.key_pair == b"111112222" if not dry_run else b"11111"
+    assert entry.base_key_pair is None
+    assert backup_store.save.call_count == int(not dry_run)
+    assert "Saving a new copy of /foo" in caplog.text
 
 
 @pytest.mark.parametrize("dry_run", [True, False])

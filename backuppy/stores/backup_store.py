@@ -4,11 +4,11 @@ import sys
 import time
 from abc import ABCMeta
 from abc import abstractmethod
+from collections.abc import Iterator
 from contextlib import contextmanager
 from functools import partial
 from shutil import rmtree
 from types import FrameType
-from collections.abc import Iterator
 
 import colorlog
 import staticconf
@@ -18,16 +18,17 @@ from backuppy.blob import compute_diff
 from backuppy.crypto import compress_and_encrypt
 from backuppy.crypto import decrypt_and_unpack
 from backuppy.crypto import generate_key_pair
+from backuppy.exceptions import BackupReadFailedException
 from backuppy.exceptions import DiffTooLargeException
 from backuppy.exceptions import ManifestLockedException
-from backuppy.io import compute_sha
 from backuppy.io import IOIter
-from backuppy.manifest import lock_manifest
-from backuppy.manifest import Manifest
+from backuppy.io import compute_sha
 from backuppy.manifest import MANIFEST_FILE
 from backuppy.manifest import MANIFEST_KEY_FILE
 from backuppy.manifest import MANIFEST_PREFIX
+from backuppy.manifest import Manifest
 from backuppy.manifest import ManifestEntry
+from backuppy.manifest import lock_manifest
 from backuppy.manifest import unlock_manifest
 from backuppy.options import DEFAULT_OPTIONS
 from backuppy.options import OptionsDict
@@ -183,11 +184,19 @@ class BackupStore(metaclass=ABCMeta):
         restore_file: IOIter,
     ) -> None:
         if entry.base_sha:
-            self.load(entry.base_sha, orig_file, entry.base_key_pair)
-            self.load(entry.sha, diff_file, entry.key_pair)
+            res = self.load(entry.base_sha, orig_file, entry.base_key_pair)
+            if res is None:
+                raise BackupReadFailedException(f"could not restore entry {entry.abs_file_name}; base file unreadable")
+
+            res = self.load(entry.sha, diff_file, entry.key_pair)
+            if res is None:
+                raise BackupReadFailedException(f"could not restore entry {entry.abs_file_name}; diff file unreadable")
+
             apply_diff(orig_file, diff_file, restore_file)
         else:
-            self.load(entry.sha, restore_file, entry.key_pair)
+            res = self.load(entry.sha, restore_file, entry.key_pair)
+            if res is None:
+                raise BackupReadFailedException(f"could not restore entry {entry.abs_file_name}; file unreadable")
 
     def save(self, src: IOIter, dest: str, key_pair: bytes) -> bytes:
         """Wrapper around the _save function that converts the SHA to a path and does encryption
@@ -214,11 +223,13 @@ class BackupStore(metaclass=ABCMeta):
         src: str,
         dest: IOIter,
         key_pair: bytes | None,
-    ) -> IOIter:
+    ) -> IOIter | None:
         """Wrapper around the _load function that converts the SHA to a path"""
         src = sha_to_path(src)
         with IOIter() as encrypted_load_file:
-            self._load(src, encrypted_load_file)
+            res = self._load(src, encrypted_load_file)
+            if res is None:
+                return None
             decrypt_and_unpack(encrypted_load_file, dest, key_pair, self.options)
         dest.fd.seek(0)
         return dest
@@ -337,8 +348,13 @@ class BackupStore(metaclass=ABCMeta):
 
         if not entry_data:
             assert base_sha
-            with IOIter() as orig_file, IOIter() as diff_file:
-                orig_file = self.load(base_sha, orig_file, base_key_pair)
+            with IOIter() as _orig_file, IOIter() as diff_file:
+                orig_file = self.load(base_sha, _orig_file, base_key_pair)
+                if orig_file is None:
+                    logger.info("The original file could not be read; saving a copy instead.")
+                    file_obj.fd.seek(0)
+                    return self._write_copy(abs_file_name, new_sha, file_obj, False, dry_run)
+
                 try:
                     fd_diff = compute_diff(
                         orig_file,
@@ -375,7 +391,7 @@ class BackupStore(metaclass=ABCMeta):
         pass
 
     @abstractmethod
-    def _load(self, path: str, tmpfile: IOIter) -> IOIter:  # pragma: no cover
+    def _load(self, path: str, tmpfile: IOIter) -> IOIter | None:  # pragma: no cover
         pass
 
     @abstractmethod
@@ -417,7 +433,7 @@ def _cleanup_and_exit(signum: int, frame: FrameType, dry_run: bool, preserve_scr
         try:
             _UNLOCKED_STORE.do_cleanup(dry_run, preserve_scratch)
         except Exception as e:
-            logger.exception(f"Shutdown was requested, but there was an error cleaning up: {str(e)}")
+            logger.exception(f"Shutdown was requested, but there was an error cleaning up: {e!s}")
             sys.exit(1)
 
     logger.info("Cleanup complete; shutting down")

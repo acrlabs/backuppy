@@ -230,7 +230,7 @@ class Manifest:
         """
 
         if not self.get_entry(abs_file_name):
-            logger.warn("Trying to delete untracked file; nothing written to datastore")
+            logger.warning("Trying to delete untracked file; nothing written to datastore")
             return
 
         commit_timestamp = int(time.time())
@@ -355,12 +355,14 @@ class Manifest:
 def get_manifest_keypair(
     manifest_filename: str,
     private_key_filename: str,
-    load: Callable[[str, IOIter], IOIter],
+    load: Callable[[str, IOIter], IOIter | None],
 ) -> bytes:
     ts = manifest_filename.split(".", 1)[1]
-    with IOIter() as manifest_key:
+    with IOIter() as _manifest_key:
         # the key is not large enough to worry about chunked reads, so just do it all at once
-        load(MANIFEST_KEY_FILE.format(ts=ts), manifest_key)
+        manifest_key = load(MANIFEST_KEY_FILE.format(ts=ts), _manifest_key)
+        assert manifest_key  # if we can't read this, we're in trouble
+
         manifest_key.fd.seek(0)
         encrypted_key_pair = manifest_key.fd.read()
     return decrypt_and_verify(encrypted_key_pair, private_key_filename)
@@ -369,7 +371,7 @@ def get_manifest_keypair(
 def unlock_manifest(
     manifest_filename: str,
     private_key_filename: str,
-    load: Callable[[str, IOIter], IOIter],
+    load: Callable[[str, IOIter], IOIter | None],
     options: OptionsDict,
 ) -> Manifest:
     """Load a manifest into local storage and unencrypt it
@@ -391,10 +393,11 @@ def unlock_manifest(
 
     # Now use the key and nonce to decrypt the manifest
     with (
-        IOIter() as encrypted_local_manifest,
+        IOIter() as _encrypted_local_manifest,
         IOIter(local_manifest_filename, check_mtime=False) as local_manifest,
     ):
-        load(manifest_filename, encrypted_local_manifest)
+        encrypted_local_manifest = load(manifest_filename, _encrypted_local_manifest)
+        assert encrypted_local_manifest  # if we can't read this, we're in trouble
         decrypt_and_unpack(encrypted_local_manifest, local_manifest, key_pair, options)
 
     return Manifest(local_manifest_filename)
@@ -404,7 +407,7 @@ def lock_manifest(
     manifest: Manifest,
     private_key_filename: str,
     save: Callable[[IOIter, str], None],
-    load: Callable[[str, IOIter], IOIter],
+    load: Callable[[str, IOIter], IOIter | None],
     options: OptionsDict,
 ) -> None:
     """Save a manifest from local storage to the backup store
