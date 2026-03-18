@@ -1371,21 +1371,6 @@ files = [
 ]
 
 [[package]]
-name = "pyfakefs"
-version = "6.1.5"
-description = "Implements a fake file system that mocks the Python file system modules."
-optional = false
-python-versions = ">=3.10"
-groups = ["dev"]
-files = [
-    {file = "pyfakefs-6.1.5-py3-none-any.whl", hash = "sha256:2c482f36bad7d1f7516d58d17818fb0dbe397a3372ec5274869386a9b7cd4883"},
-    {file = "pyfakefs-6.1.5.tar.gz", hash = "sha256:d70fb1c622a1d5c729462d31bb58eead99c1830986bc049bf8975c480a49d19b"},
-]
-
-[package.extras]
-doc = ["furo (>=2025.12.19)", "myst-parser (>=5.0.0)", "sphinx (>=7.0.0)"]
-
-[[package]]
 name = "pyflakes"
 version = "3.4.0"
 description = "passive checker of Python programs"
@@ -1912,4 +1897,4 @@ test = ["pytest", "pytest-cov"]
 [metadata]
 lock-version = "2.1"
 python-versions = "^3.13"
-content-hash = "c27378b9f61a5d57832d2eca71c2fd82340c306d8129031db392aca6cc3328c2"
+content-hash = "63a2a682f9c300efe300f654196971be934ffd0d2b4366eb10eccb112b10f044"
