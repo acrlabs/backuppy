@@ -14,9 +14,7 @@ class CustomHelpFormatter(argparse.ArgumentDefaultsHelpFormatter):  # pragma: no
         super().__init__(prog, max_help_position=35, width=100)
 
 
-def subparser(
-    command: str, description: str, entrypoint: Callable
-) -> Callable:  # pragma: no cover
+def subparser(command: str, description: str, entrypoint: Callable) -> Callable:  # pragma: no cover
     """Function decorator to simplify adding arguments to subcommands
 
     :param command: name of the subcommand to add
@@ -33,9 +31,7 @@ def subparser(
                 add_help=False,
             )
             add_args(subparser)
-            subparser.add_argument(
-                "-h", "--help", action="help", help="show this message and exit"
-            )
+            subparser.add_argument("-h", "--help", action="help", help="show this message and exit")
             subparser.set_defaults(entrypoint=entrypoint)
 
         return wrapper
@@ -44,9 +40,7 @@ def subparser(
 
 
 def add_name_arg(parser: argparse.ArgumentParser) -> None:  # pragma: no cover
-    parser.add_argument(
-        "--name", required=True, help="Name of the backup set to examine"
-    )
+    parser.add_argument("--name", required=True, help="Name of the backup set to examine")
 
 
 def add_preserve_scratch_arg(
@@ -93,9 +87,7 @@ def parse_args(
         choices=["debug", "debug2", "info", "warning", "error", "critical"],
         help="Log level for the rotated log file; has no effect if no log file is specified",
     )
-    root_parser.add_argument(
-        "-v", "--version", action="version", version="backuppy" + __version__
-    )
+    root_parser.add_argument("-v", "--version", action="version", version="backuppy" + __version__)
     root_parser.add_argument(
         "--config",
         default="backuppy.conf",

@@ -34,12 +34,8 @@ def test_fix_duplicate_entries_ok(capsys):
     assert "trying to clean up" not in out
 
 
-@pytest.mark.parametrize(
-    "has_good_entry,path_exists", [(True, None), (False, False), (False, True)]
-)
-def test_fix_duplicate_entries(
-    has_good_entry, path_exists, mock_manifest_entry_list, capsys
-):
+@pytest.mark.parametrize("has_good_entry,path_exists", [(True, None), (False, False), (False, True)])
+def test_fix_duplicate_entries(has_good_entry, path_exists, mock_manifest_entry_list, capsys):
     mock_manifest_entry_list.extend(mock_manifest_entry_list)
     backup_store = mock.Mock()
     backup_store.manifest.find_duplicate_entries.return_value = mock_manifest_entry_list
@@ -69,15 +65,11 @@ def test_fix_shas_with_multiple_key_pairs_ok(capsys):
 
 
 @pytest.mark.parametrize("has_good_entry", [True, False])
-def test_fix_shas_with_multiple_key_pairs(
-    has_good_entry, mock_manifest_entry_list, capsys
-):
+def test_fix_shas_with_multiple_key_pairs(has_good_entry, mock_manifest_entry_list, capsys):
     mock_manifest_entry_list.extend(mock_manifest_entry_list)
     mock_manifest_entry_list[1].key_pair = b"2222"
     backup_store = mock.Mock()
-    backup_store.manifest.find_shas_with_multiple_key_pairs.return_value = (
-        mock_manifest_entry_list
-    )
+    backup_store.manifest.find_shas_with_multiple_key_pairs.return_value = mock_manifest_entry_list
     with (
         mock.patch("backuppy.cli.verify.ask_for_confirmation", return_value=True),
         mock.patch("backuppy.cli.verify._check_entry") as mock_check,
@@ -86,9 +78,7 @@ def test_fix_shas_with_multiple_key_pairs(
         _fix_shas_with_multiple_key_pairs(backup_store)
     out, _ = capsys.readouterr()
     assert "trying to clean up" in out
-    assert backup_store.manifest.insert_or_update.call_count == (
-        2 if has_good_entry else 0
-    )
+    assert backup_store.manifest.insert_or_update.call_count == (2 if has_good_entry else 0)
     assert backup_store.save_if_new.call_count == (0 if has_good_entry else 1)
 
 
@@ -103,9 +93,7 @@ def test_verify_bad_sha(mock_manifest_entry_list):
     backup_store = mock.Mock()
     with mock.patch("backuppy.cli.verify.ask_for_confirmation", return_value=True):
         _verify(mock_manifest_entry_list, backup_store, True)
-    assert backup_store.save_if_new.call_args == mock.call(
-        "/path/0/foo/bar", force_copy=True
-    )
+    assert backup_store.save_if_new.call_args == mock.call("/path/0/foo/bar", force_copy=True)
 
 
 @pytest.mark.parametrize(
@@ -121,9 +109,7 @@ def test_main(sha, entries, fast):
     backup_store = mock.MagicMock(
         manifest=mock.Mock(
             get_entries_by_sha=mock.Mock(return_value=entries),
-            search=mock.Mock(
-                return_value=[("/foo", [mock.Mock()]), ("/bar", [mock.Mock()])]
-            ),
+            search=mock.Mock(return_value=[("/foo", [mock.Mock()]), ("/bar", [mock.Mock()])]),
         ),
     )
     with (

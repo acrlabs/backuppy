@@ -46,9 +46,7 @@ def init():
 def clear_restore():
     try:
         rmtree(RESTORE_DIR)
-        time.sleep(
-            1
-        )  # give the filesystem some time to catch up since we do this for every test
+        time.sleep(1)  # give the filesystem some time to catch up since we do this for every test
     except FileNotFoundError:
         pass
 
@@ -84,9 +82,7 @@ def assert_backup_store_correct():
             [deduped_history.append(i) for i in history if i not in deduped_history]
             assert len(rows) == len(deduped_history)
             for row in rows:
-                assert (row["sha"], row["mode"]) in [
-                    (e.sha, e.mode) for e in deduped_history
-                ]
+                assert (row["sha"], row["mode"]) in [(e.sha, e.mode) for e in deduped_history]
 
         if latest.backup_path:
             manifest_cursor.execute(
@@ -98,9 +94,7 @@ def assert_backup_store_correct():
                 if not row or not row[1]:
                     assert n.fd.read() == latest.contents
                 else:
-                    orig_file_path = path_join(
-                        BACKUP_DIR, row[1][:2], row[1][2:4], row[1][4:]
-                    )
+                    orig_file_path = path_join(BACKUP_DIR, row[1][:2], row[1][2:4], row[1][4:])
                     with IOIter(orig_file_path) as o, IOIter() as tmp:
                         apply_diff(o, n, tmp)
                         tmp.fd.seek(0)

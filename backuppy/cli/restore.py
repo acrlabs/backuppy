@@ -38,10 +38,7 @@ def _confirm_restore(
 ) -> bool:
     print("")
     if os.path.exists(destination):
-        print(
-            f"WARNING: {destination_str} already exists.  "
-            "Files in this location may be overwritten."
-        )
+        print(f"WARNING: {destination_str} already exists.  Files in this location may be overwritten.")
     print(f"Backuppy will restore the following files to {destination_str}:\n")
     print(
         tabulate(
@@ -117,9 +114,7 @@ def add_restore_parser(subparser) -> None:  # pragma: no cover
         nargs="?",
         help="Query string to search the backup set for",
     )
-    subparser.add_argument(
-        "--name", required=True, help="Name of the backup set to examine"
-    )
+    subparser.add_argument("--name", required=True, help="Name of the backup set to examine")
     subparser.add_argument(
         "--before",
         metavar="TIME",
@@ -129,9 +124,7 @@ def add_restore_parser(subparser) -> None:  # pragma: no cover
         "--sha",
         help="Restore the file corresponding to this SHA",
     )
-    subparser.add_argument(
-        "--dest", default=".", help="Location to restore the file(s) to"
-    )
+    subparser.add_argument("--dest", default=".", help="Location to restore the file(s) to")
     subparser.add_argument(
         "-y",
         "--yes",

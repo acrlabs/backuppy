@@ -17,9 +17,7 @@ def main(args: argparse.Namespace) -> None:
 
     if args.manifest:
         manifest = Manifest(args.filename)
-        private_key_filename = backup_store.config.read(
-            "private_key_filename", default=""
-        )
+        private_key_filename = backup_store.config.read("private_key_filename", default="")
         lock_manifest(
             manifest,
             private_key_filename,

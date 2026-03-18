@@ -23,9 +23,7 @@ def s3_client():
     )
     client.put_object(Bucket="test_bucket", Key="/foo", Body="old boring content")
     client.put_object(Bucket="test_bucket", Key="/biz/baz", Body="old boring content 2")
-    client.put_object(
-        Bucket="test_bucket", Key="/fuzz/buzz", Body="old boring content 3"
-    )
+    client.put_object(Bucket="test_bucket", Key="/fuzz/buzz", Body="old boring content 3")
     yield client
     mock_s3_obj.stop()
 
@@ -58,14 +56,8 @@ def test_save(fs_path, s3_client, mock_backup_store):
     ):
         mock_backup_store._save(input1, "/foo")
         mock_backup_store._save(input2, "/asdf/bar")
-    assert (
-        s3_client.get_object(Bucket="test_bucket", Key="/foo")["Body"].read()
-        == b"i'm a copy of foo"
-    )
-    assert (
-        s3_client.get_object(Bucket="test_bucket", Key="/asdf/bar")["Body"].read()
-        == b"i'm a copy of bar"
-    )
+    assert s3_client.get_object(Bucket="test_bucket", Key="/foo")["Body"].read() == b"i'm a copy of foo"
+    assert s3_client.get_object(Bucket="test_bucket", Key="/asdf/bar")["Body"].read() == b"i'm a copy of bar"
 
 
 def test_load(fs_path, s3_client, mock_backup_store):
@@ -100,43 +92,32 @@ def test_delete(s3_client, mock_backup_store):
 
 @pytest.mark.parametrize("sc", ["STANDARD", "INTELLIGENT_TIERING"])
 def test_compute_object_storage_class_size_1(mock_backup_store, sc):
-    with staticconf.testing.PatchConfiguration(
-        {"protocol": {"storage_class": sc}}, namespace="fake_backup"
-    ):
-        assert (
-            mock_backup_store._compute_object_storage_class(mock.Mock(filename="foo"))
-            == sc
-        )
+    with staticconf.testing.PatchConfiguration({"protocol": {"storage_class": sc}}, namespace="fake_backup"):
+        assert mock_backup_store._compute_object_storage_class(mock.Mock(filename="foo")) == sc
 
 
 @pytest.mark.parametrize("size", [STANDARD_IA_SIZE, STANDARD_IA_SIZE - 1])
 def test_compute_object_storage_class_size_2(mock_backup_store, size):
-    with staticconf.testing.PatchConfiguration(
-        {"protocol": {"storage_class": "STANDARD_IA"}}, namespace="fake_backup"
-    ):
-        assert mock_backup_store._compute_object_storage_class(
-            mock.Mock(filename="foo", size=size)
-        ) == ("STANDARD_IA" if size == STANDARD_IA_SIZE else "STANDARD")
+    with staticconf.testing.PatchConfiguration({"protocol": {"storage_class": "STANDARD_IA"}}, namespace="fake_backup"):
+        assert mock_backup_store._compute_object_storage_class(mock.Mock(filename="foo", size=size)) == (
+            "STANDARD_IA" if size == STANDARD_IA_SIZE else "STANDARD"
+        )
 
 
 @pytest.mark.parametrize("size", [ONEZONE_IA_SIZE, ONEZONE_IA_SIZE - 1])
 def test_compute_object_storage_class_size_3(mock_backup_store, size):
-    with staticconf.testing.PatchConfiguration(
-        {"protocol": {"storage_class": "ONEZONE_IA"}}, namespace="fake_backup"
-    ):
-        assert mock_backup_store._compute_object_storage_class(
-            mock.Mock(filename="foo", size=size)
-        ) == ("ONEZONE_IA" if size == ONEZONE_IA_SIZE else "STANDARD")
+    with staticconf.testing.PatchConfiguration({"protocol": {"storage_class": "ONEZONE_IA"}}, namespace="fake_backup"):
+        assert mock_backup_store._compute_object_storage_class(mock.Mock(filename="foo", size=size)) == (
+            "ONEZONE_IA" if size == ONEZONE_IA_SIZE else "STANDARD"
+        )
 
 
 @pytest.mark.parametrize("size", [GLACIER_SIZE, GLACIER_SIZE - 1])
 def test_compute_object_storage_class_size_4(mock_backup_store, size):
-    with staticconf.testing.PatchConfiguration(
-        {"protocol": {"storage_class": "GLACIER"}}, namespace="fake_backup"
-    ):
-        assert mock_backup_store._compute_object_storage_class(
-            mock.Mock(filename="foo", size=size)
-        ) == ("GLACIER" if size == GLACIER_SIZE else "STANDARD")
+    with staticconf.testing.PatchConfiguration({"protocol": {"storage_class": "GLACIER"}}, namespace="fake_backup"):
+        assert mock_backup_store._compute_object_storage_class(mock.Mock(filename="foo", size=size)) == (
+            "GLACIER" if size == GLACIER_SIZE else "STANDARD"
+        )
 
 
 @pytest.mark.parametrize("size", [DEEP_ARCHIVE_SIZE, DEEP_ARCHIVE_SIZE - 1])
@@ -144,9 +125,9 @@ def test_compute_object_storage_class_size_5(mock_backup_store, size):
     with staticconf.testing.PatchConfiguration(
         {"protocol": {"storage_class": "DEEP_ARCHIVE"}}, namespace="fake_backup"
     ):
-        assert mock_backup_store._compute_object_storage_class(
-            mock.Mock(filename="foo", size=size)
-        ) == ("DEEP_ARCHIVE" if size == DEEP_ARCHIVE_SIZE else "STANDARD")
+        assert mock_backup_store._compute_object_storage_class(mock.Mock(filename="foo", size=size)) == (
+            "DEEP_ARCHIVE" if size == DEEP_ARCHIVE_SIZE else "STANDARD"
+        )
 
 
 def test_compute_object_storage_manifest(mock_backup_store):
@@ -161,9 +142,7 @@ def test_compute_object_storage_manifest(mock_backup_store):
         )
         assert (
             mock_backup_store._compute_object_storage_class(
-                mock.Mock(
-                    filename="/tmp/foo/baz/manifest-key.12345566", size=100000000000
-                )
+                mock.Mock(filename="/tmp/foo/baz/manifest-key.12345566", size=100000000000)
             )
             == "STANDARD"
         )

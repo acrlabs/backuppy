@@ -97,9 +97,7 @@ def test_compress_and_encrypt(caplog, mock_open_streams):
 
 def test_decrypt_and_unpack_no_compression_no_encryption(caplog, mock_open_streams):
     orig, new, _ = mock_open_streams
-    decrypt_and_unpack(
-        orig, new, b"", dict(use_compression=False, use_encryption=False)
-    )
+    decrypt_and_unpack(orig, new, b"", dict(use_compression=False, use_encryption=False))
     assert new._fd.getvalue() == orig._fd.getvalue()
     assert count_matching_log_lines("read 2 bytes from /orig", caplog) == 4
     assert count_matching_log_lines("wrote 2 bytes to /new", caplog) == 4

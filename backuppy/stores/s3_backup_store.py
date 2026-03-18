@@ -27,9 +27,7 @@ class S3BackupStore(BackupStore):
         super().__init__(backup_name)
         session = boto3.session.Session(
             aws_access_key_id=self.config.read_string("protocol.aws_access_key_id"),
-            aws_secret_access_key=self.config.read_string(
-                "protocol.aws_secret_access_key"
-            ),
+            aws_secret_access_key=self.config.read_string("protocol.aws_secret_access_key"),
             region_name=self.config.read_string("protocol.aws_region"),
         )
         self._bucket = self.config.read_string("protocol.bucket")
@@ -38,10 +36,7 @@ class S3BackupStore(BackupStore):
     def _save(self, src: IOIter, dest: str) -> None:
         assert src.filename  # can't have a tmpfile here
         dest = dest.replace("\\", "/")  # convert Windows separators to S3 separators
-        if (
-            self._client.list_objects_v2(Bucket=self._bucket, Prefix=dest)["KeyCount"]
-            > 0
-        ):
+        if self._client.list_objects_v2(Bucket=self._bucket, Prefix=dest)["KeyCount"] > 0:
             logger.warning(
                 f"{dest} already exists in {self._bucket}; overwriting with new data",
             )
@@ -85,9 +80,7 @@ class S3BackupStore(BackupStore):
         if "manifest" in obj.filename:
             return "STANDARD"
 
-        storage_class = self.config.read_string(
-            "protocol.storage_class", default="STANDARD"
-        )
+        storage_class = self.config.read_string("protocol.storage_class", default="STANDARD")
         if (
             storage_class in REGULAR_STORAGE_CLASSES
             or (storage_class == "STANDARD_IA" and obj.size >= STANDARD_IA_SIZE)

@@ -49,19 +49,13 @@ def mock_manifest():
     return m
 
 
-@pytest.mark.parametrize(
-    "existing_tables", [[], [{"name": "manifest"}, {"name": "base_shas"}]]
-)
+@pytest.mark.parametrize("existing_tables", [[], [{"name": "manifest"}, {"name": "base_shas"}]])
 def test_create_manifest_object(existing_tables):
     with (
         mock.patch("backuppy.manifest.sqlite3") as mock_sqlite,
-        mock.patch(
-            "backuppy.manifest.Manifest._create_manifest_tables"
-        ) as mock_create_tables,
+        mock.patch("backuppy.manifest.Manifest._create_manifest_tables") as mock_create_tables,
     ):
-        mock_sqlite.connect.return_value.cursor.return_value.fetchall.return_value = (
-            existing_tables
-        )
+        mock_sqlite.connect.return_value.cursor.return_value.fetchall.return_value = existing_tables
         Manifest("my_manifest.sqlite")
         assert mock_create_tables.call_count == 1 - bool(len(existing_tables))
 
@@ -76,13 +70,9 @@ def test_create_manifest_object(existing_tables):
 def test_corrupted_manifest(existing_tables):
     with (
         mock.patch("backuppy.manifest.sqlite3") as mock_sqlite,
-        mock.patch(
-            "backuppy.manifest.Manifest._create_manifest_tables"
-        ) as mock_create_tables,
+        mock.patch("backuppy.manifest.Manifest._create_manifest_tables") as mock_create_tables,
     ):
-        mock_sqlite.connect.return_value.cursor.return_value.fetchall.return_value = (
-            existing_tables
-        )
+        mock_sqlite.connect.return_value.cursor.return_value.fetchall.return_value = existing_tables
         with pytest.raises(BackupCorruptedError):
             Manifest("my_manifest.sqlite")
         assert mock_create_tables.call_count == 0
@@ -170,9 +160,7 @@ def test_search_history_limit(mock_manifest, limit):
 def test_insert_new_file(mock_manifest, mock_stat, base_sha, base_key_pair):
     new_file = "/not/backed/up"
     uid, gid, mode = mock_stat.st_uid, mock_stat.st_gid, mock_stat.st_mode
-    new_entry = ManifestEntry(
-        new_file, "b33f", base_sha, uid, gid, mode, b"1111", base_key_pair
-    )
+    new_entry = ManifestEntry(new_file, "b33f", base_sha, uid, gid, mode, b"1111", base_key_pair)
     mock_manifest.insert_or_update(new_entry)
     mock_manifest._cursor.execute(
         """
@@ -198,9 +186,7 @@ def test_insert_new_file(mock_manifest, mock_stat, base_sha, base_key_pair):
 def test_update(mock_manifest, mock_stat, base_sha, base_key_pair):
     new_file = "/foo"
     uid, gid, mode = mock_stat.st_uid, mock_stat.st_gid, mock_stat.st_mode
-    new_entry = ManifestEntry(
-        new_file, "b33f2", base_sha, uid, gid, mode, b"1111", base_key_pair
-    )
+    new_entry = ManifestEntry(new_file, "b33f2", base_sha, uid, gid, mode, b"1111", base_key_pair)
     mock_manifest.insert_or_update(new_entry)
     mock_manifest._cursor.execute(
         """
@@ -225,9 +211,7 @@ def test_update(mock_manifest, mock_stat, base_sha, base_key_pair):
 def test_insert_duplicate(mock_manifest, mock_stat):
     same_file = "/foo"
     uid, gid, mode = mock_stat.st_uid, mock_stat.st_gid, mock_stat.st_mode
-    new_entry = ManifestEntry(
-        same_file, "12345678", None, uid, gid, mode, b"1111", None
-    )
+    new_entry = ManifestEntry(same_file, "12345678", None, uid, gid, mode, b"1111", None)
     mock_manifest.insert_or_update(new_entry)
     mock_manifest._cursor.execute(
         """

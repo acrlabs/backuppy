@@ -45,9 +45,7 @@ def compress_and_encrypt(
     :param input_file: an IOIter object to read plaintext data from
     :param output_file: an IOIter object to write compressed ciphertext to
     """
-    key, nonce = (
-        (key_pair[:AES_KEY_SIZE], key_pair[AES_KEY_SIZE:]) if key_pair else (b"", b"")
-    )
+    key, nonce = (key_pair[:AES_KEY_SIZE], key_pair[AES_KEY_SIZE:]) if key_pair else (b"", b"")
     compressobj = zlib.compressobj()
     zip_fn: Callable[[bytes], bytes] = (  # type: ignore
         compressobj.compress if options["use_compression"] else identity
@@ -60,16 +58,12 @@ def compress_and_encrypt(
     hmac = HMAC(key, SHA256(), default_backend())
 
     def last_block() -> Generator[tuple[bytes, bool], None, None]:
-        yield (
-            (compressobj.flush(), False) if options["use_compression"] else (b"", False)
-        )
+        yield ((compressobj.flush(), False) if options["use_compression"] else (b"", False))
 
     writer = output_file.writer()
     next(writer)
     logger.debug2("starting to compress")  # type: ignore[attr-defined]
-    for block, needs_compression in chain(
-        zip(input_file.reader(), repeat(True)), last_block()
-    ):
+    for block, needs_compression in chain(zip(input_file.reader(), repeat(True)), last_block()):
         if needs_compression:
             block = zip_fn(block)
         logger.debug2(f"zip_fn returned {len(block)} bytes")  # type: ignore[attr-defined]
@@ -211,8 +205,7 @@ def _get_key(private_key_filename: str) -> RSAPrivateKey:
 
     if private_key.key_size != RSA_KEY_SIZE_BITS:
         raise ValueError(
-            f"Backuppy requires a {RSA_KEY_SIZE_BITS}-bit private key, "
-            f"this is {private_key.key_size} bits"
+            f"Backuppy requires a {RSA_KEY_SIZE_BITS}-bit private key, this is {private_key.key_size} bits"
         )
 
     return private_key

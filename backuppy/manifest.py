@@ -86,9 +86,7 @@ class Manifest:
         rows = self._cursor.fetchall()
         tables = {r["name"] for r in rows}
         if tables and not (tables == _MANIFEST_TABLES):
-            raise BackupCorruptedError(
-                f"The manifest does not have the right tables: {tables}"
-            )
+            raise BackupCorruptedError(f"The manifest does not have the right tables: {tables}")
         elif not tables:
             logger.info("This looks like a new manifest; initializing")
             self._create_manifest_tables()
@@ -332,9 +330,7 @@ class Manifest:
             )
             """
         )
-        self._cursor.execute(
-            "create index mfst_idx on manifest(abs_file_name, commit_timestamp)"
-        )
+        self._cursor.execute("create index mfst_idx on manifest(abs_file_name, commit_timestamp)")
         self._cursor.execute(
             "create unique index mfst_unique_idx on manifest(abs_file_name, sha, uid, gid, mode)",
         )
@@ -343,18 +339,13 @@ class Manifest:
         self._commit()
 
     def _ensure_correct_key_pairs(self, sha: str, key_pair: bytes):
-        self._cursor.execute(
-            "select * from manifest where sha=? and key_pair!=?", (sha, key_pair)
-        )
+        self._cursor.execute("select * from manifest where sha=? and key_pair!=?", (sha, key_pair))
         rows = self._cursor.fetchall()
         if len(rows) > 0:
             logger.warning(
-                f"Found {len(rows)} entries for {sha} with invalid key pair; "
-                "force-updating to the good key-pair."
+                f"Found {len(rows)} entries for {sha} with invalid key pair; force-updating to the good key-pair."
             )
-            self._cursor.execute(
-                "update manifest set key_pair=? where sha=?", (key_pair, sha)
-            )
+            self._cursor.execute("update manifest set key_pair=? where sha=?", (key_pair, sha))
             self._cursor.execute(
                 "update base_shas set base_key_pair=? where base_sha=?",
                 (key_pair, sha),
@@ -439,17 +430,13 @@ def lock_manifest(
         IOIter(local_manifest_filename) as local_manifest,
         IOIter(local_manifest_filename + ".enc") as encrypted_manifest,
     ):
-        signature = compress_and_encrypt(
-            local_manifest, encrypted_manifest, key_pair, options
-        )
+        signature = compress_and_encrypt(local_manifest, encrypted_manifest, key_pair, options)
         save(encrypted_manifest, new_manifest_filename)
 
     # Finally, save the manifest key/nonce along with its HMAC using the user's private key
     if options["use_encryption"]:
         with IOIter(local_manifest_filename + ".key") as new_manifest_key:
-            new_manifest_key.fd.write(
-                encrypt_and_sign(key_pair + signature, private_key_filename)
-            )
+            new_manifest_key.fd.write(encrypt_and_sign(key_pair + signature, private_key_filename))
             new_manifest_key.fd.seek(0)
             save(new_manifest_key, MANIFEST_KEY_FILE.format(ts=timestamp))
 
@@ -457,7 +444,6 @@ def lock_manifest(
         unlock_manifest(new_manifest_filename, private_key_filename, load, options)
     except Exception:
         logger.critical(
-            "The saved manifest could not be decrypted!  "
-            "The contents of the most recent backup is inaccessible!"
+            "The saved manifest could not be decrypted!  The contents of the most recent backup is inaccessible!"
         )
         raise

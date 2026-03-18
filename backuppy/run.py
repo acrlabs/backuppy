@@ -38,9 +38,7 @@ def setup_logging(
 
         handler = colorlog.StreamHandler()
         handler.setFormatter(
-            colorlog.ColoredFormatter(
-                "%(log_color)s%(asctime)s %(levelname)s %(name)s(%(lineno)d) -- %(message)s"
-            )
+            colorlog.ColoredFormatter("%(log_color)s%(asctime)s %(levelname)s %(name)s(%(lineno)d) -- %(message)s")
         )
         log_level = getattr(logging, log_level_str.upper())
         handler.setLevel(log_level)
@@ -58,9 +56,7 @@ def setup_logging(
             log_file_level = getattr(logging, log_file_level_str.upper())
             log_file_handler.setLevel(log_file_level)
             log_file_handler.setFormatter(
-                logging.Formatter(
-                    "%(asctime)s %(levelname)s %(name)s(%(lineno)d) -- %(message)s"
-                )
+                logging.Formatter("%(asctime)s %(levelname)s %(name)s(%(lineno)d) -- %(message)s")
             )
 
             if log_file_level < min_log_level:

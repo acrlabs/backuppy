@@ -69,8 +69,6 @@ def test_main(dry_run):
             re.compile("bar"),
         ]
         if not dry_run:
-            assert all(
-                [c == mock.call("/file4") for c in store.manifest.delete.call_args_list]
-            )
+            assert all([c == mock.call("/file4") for c in store.manifest.delete.call_args_list])
         else:
             assert store.manifest.delete.call_count == 0

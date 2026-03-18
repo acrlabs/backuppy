@@ -144,9 +144,7 @@ def test_duplicate_entries(both_bad, capsys):
             ),
         )
         if both_bad:
-            backup_store.manifest._cursor.execute(
-                "update manifest set key_pair=?", (b"asdf",)
-            )
+            backup_store.manifest._cursor.execute("update manifest set key_pair=?", (b"asdf",))
         backup_store.manifest._commit()
     verify(VERIFY_ARGS)
     out, _ = capsys.readouterr()

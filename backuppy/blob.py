@@ -77,16 +77,11 @@ def compute_diff(
     writer = diff_file.writer()
     next(writer)
     logger.debug2("beginning diff computation")  # type: ignore[attr-defined]
-    for orig_bytes, new_bytes in zip_longest(
-        orig_file.reader(), new_file.reader(), fillvalue=b""
-    ):
+    for orig_bytes, new_bytes in zip_longest(orig_file.reader(), new_file.reader(), fillvalue=b""):
         diff = bsdiff4.diff(orig_bytes, new_bytes)
         diff_str = str(len(diff)).encode() + SEPARATOR + diff
         total_written += len(diff_str)
-        if (
-            discard_diff_percentage
-            and total_written > orig_file.size * discard_diff_percentage
-        ):
+        if discard_diff_percentage and total_written > orig_file.size * discard_diff_percentage:
             raise DiffTooLargeException
         writer.send(diff_str)
 

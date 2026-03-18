@@ -30,9 +30,7 @@ def _scan_directory(
     """
     backup_store.manifest.files()
     marked_files = set()
-    for abs_file_name in file_walker(
-        abs_base_path, on_error=logger.warning, exclusions=exclusions
-    ):
+    for abs_file_name in file_walker(abs_base_path, on_error=logger.warning, exclusions=exclusions):
         # Mark the file as "seen" so it isn't deleted later
         marked_files.add(abs_file_name)
 
@@ -41,9 +39,7 @@ def _scan_directory(
         except Exception as e:
             # We never want to hard-fail a backup just because one file crashed; we'd rather back up
             # as much as we can, and log the failures for further investigation
-            logger.exception(
-                f"There was a problem backing up {abs_file_name}: {str(e)}; skipping"
-            )
+            logger.exception(f"There was a problem backing up {abs_file_name}: {str(e)}; skipping")
             continue
 
     # Mark all files that weren't touched in the above loop as "deleted"
@@ -58,9 +54,7 @@ def main(args: argparse.Namespace) -> None:
     logger.info(f"Starting backup for {args.name}")
     backup_store = get_backup_store(args.name)
 
-    with backup_store.unlock(
-        dry_run=args.dry_run, preserve_scratch=args.preserve_scratch_dir
-    ):
+    with backup_store.unlock(dry_run=args.dry_run, preserve_scratch=args.preserve_scratch_dir):
         marked_files: set[str] = set()
         for base_path in staticconf.read_list("directories", namespace=args.name):  # type: ignore[attr-defined]
             abs_base_path = os.path.abspath(base_path)

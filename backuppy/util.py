@@ -68,13 +68,9 @@ def file_walker(
         new_dirs = []
         for d in dirs:
             abs_dir_name = path_join(root, d) + os.sep
-            matched_patterns = [
-                excl.pattern for excl in exclusions if excl.search(abs_dir_name)
-            ]
+            matched_patterns = [excl.pattern for excl in exclusions if excl.search(abs_dir_name)]
             if matched_patterns:
-                logger.info(
-                    f'{abs_dir_name} matched exclusion(s) "{matched_patterns}"; skipping'
-                )
+                logger.info(f'{abs_dir_name} matched exclusion(s) "{matched_patterns}"; skipping')
             else:
                 new_dirs.append(d)  # don't need the abs name here
 
@@ -87,13 +83,9 @@ def file_walker(
         shuffle(files)
         for f in files:
             abs_file_name = path_join(root, f)
-            matched_patterns = [
-                excl.pattern for excl in exclusions if excl.search(abs_file_name)
-            ]
+            matched_patterns = [excl.pattern for excl in exclusions if excl.search(abs_file_name)]
             if matched_patterns:
-                logger.info(
-                    f'{abs_file_name} matched exclusion(s) "{matched_patterns}"; skipping'
-                )
+                logger.info(f'{abs_file_name} matched exclusion(s) "{matched_patterns}"; skipping')
             else:
                 yield path_join(root, f)
 

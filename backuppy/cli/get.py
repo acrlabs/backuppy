@@ -27,9 +27,7 @@ def _get(
             options = {"use_compression": False}
         else:
             options = {}
-        to_fetch = (
-            filename if filename.startswith(MANIFEST_PREFIX) else sha_to_path(filename)
-        )
+        to_fetch = filename if filename.startswith(MANIFEST_PREFIX) else sha_to_path(filename)
         backup_store._load(to_fetch, encrypted_local_file)
         decrypt_and_unpack(
             encrypted_local_file,
@@ -58,16 +56,10 @@ def main(args: argparse.Namespace) -> None:
         else:
             # Retrieve the manifest instead of a specific file; we don't call unlock_manifest
             # here so that we can have control over the action
-            filename = sorted(backup_store._query(MANIFEST_PREFIX), reverse=True)[
-                args.manifest
-            ]
+            filename = sorted(backup_store._query(MANIFEST_PREFIX), reverse=True)[args.manifest]
             filename = filename.removeprefix("/")
-            private_key_filename = backup_store.config.read(
-                "private_key_filename", default=""
-            )
-            key_pair = get_manifest_keypair(
-                filename, private_key_filename, backup_store._load
-            )
+            private_key_filename = backup_store.config.read("private_key_filename", default="")
+            key_pair = get_manifest_keypair(filename, private_key_filename, backup_store._load)
         _get(filename, key_pair, backup_store, args.action)
 
 

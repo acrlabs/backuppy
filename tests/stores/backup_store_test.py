@@ -24,9 +24,7 @@ def mock_save_load(request):
         yield
     else:
         with (
-            mock.patch(
-                "backuppy.stores.backup_store.BackupStore.save", return_value=b"2222"
-            ),
+            mock.patch("backuppy.stores.backup_store.BackupStore.save", return_value=b"2222"),
             mock.patch("backuppy.stores.backup_store.BackupStore.load"),
         ):
             yield
@@ -103,13 +101,9 @@ def test_unlock(fs_path, backup_store, manifest_exists):
     os.makedirs(get_scratch_dir())
     with (
         mock.patch("backuppy.stores.backup_store.Manifest") as mock_manifest,
-        mock.patch(
-            "backuppy.stores.backup_store.unlock_manifest"
-        ) as mock_unlock_manifest,
+        mock.patch("backuppy.stores.backup_store.unlock_manifest") as mock_unlock_manifest,
         mock.patch("backuppy.stores.backup_store.rmtree") as mock_remove,
-        mock.patch(
-            "backuppy.stores.backup_store._register_unlocked_store"
-        ) as mock_register,
+        mock.patch("backuppy.stores.backup_store._register_unlocked_store") as mock_register,
         mock.patch("backuppy.stores.backup_store._unregister_store") as mock_unregister,
     ):
         backup_store.do_cleanup = mock.Mock()
@@ -156,9 +150,7 @@ class TestSaveIfNew:
 
     def test_save_if_new_sha_different(self, backup_store, dry_run):
         backup_store.manifest.get_entry.return_value = mock.Mock(sha="abcdef123")
-        with mock.patch(
-            "backuppy.stores.backup_store.compute_sha", return_value="321fedcba"
-        ):
+        with mock.patch("backuppy.stores.backup_store.compute_sha", return_value="321fedcba"):
             backup_store.save_if_new("/foo", dry_run=dry_run)
         assert backup_store._write_copy.call_count == 0
         assert backup_store._write_diff.call_count == 1
@@ -166,25 +158,17 @@ class TestSaveIfNew:
 
     @pytest.mark.parametrize("uid_changed", [True, False])
     def test_save_if_new_sha_equal(self, backup_store, uid_changed, dry_run):
-        entry = mock.Mock(
-            sha="abcdef123", uid=(2000 if uid_changed else 1000), gid=1000, mode=12345
-        )
+        entry = mock.Mock(sha="abcdef123", uid=(2000 if uid_changed else 1000), gid=1000, mode=12345)
         backup_store.manifest.get_entry.return_value = entry
-        with mock.patch(
-            "backuppy.stores.backup_store.compute_sha", return_value="abcdef123"
-        ):
+        with mock.patch("backuppy.stores.backup_store.compute_sha", return_value="abcdef123"):
             backup_store.save_if_new("/foo", dry_run=dry_run)
         assert backup_store._write_copy.call_count == 0
         assert backup_store._write_diff.call_count == 0
-        assert backup_store.manifest.insert_or_update.call_count == int(
-            uid_changed and not dry_run
-        )
+        assert backup_store.manifest.insert_or_update.call_count == int(uid_changed and not dry_run)
 
     def test_save_if_new_skip_diff(self, backup_store, dry_run):
         with (
-            mock.patch(
-                "backuppy.stores.backup_store.compute_sha", return_value="321fedcba"
-            ),
+            mock.patch("backuppy.stores.backup_store.compute_sha", return_value="321fedcba"),
             staticconf.testing.PatchConfiguration(
                 {"options": [{"skip_diff_patterns": [".*oo"]}]},
                 namespace="fake_backup1",
@@ -208,9 +192,7 @@ def test_restore_entry(backup_store, base_sha, current_entry):
         )
         backup_store.restore_entry(current_entry, orig_file, diff_file, restore_file)
         if base_sha:
-            assert backup_store.load.call_args_list[0] == mock.call(
-                base_sha, orig_file, b"2222"
-            )
+            assert backup_store.load.call_args_list[0] == mock.call(base_sha, orig_file, b"2222")
         assert backup_store.load.call_args_list[-1] == mock.call(
             "abcdef123",
             diff_file,
@@ -223,9 +205,7 @@ def test_save(backup_store):
     expected_path = "/tmp/backuppy/12/34/5678"
     with (
         mock.patch("backuppy.stores.backup_store.IOIter") as mock_io_iter,
-        mock.patch(
-            "backuppy.stores.backup_store.compress_and_encrypt"
-        ) as mock_compress,
+        mock.patch("backuppy.stores.backup_store.compress_and_encrypt") as mock_compress,
         mock.patch("backuppy.stores.backup_store.os.remove") as mock_remove,
     ):
         backup_store.save(mock.Mock(), "12345678", b"1111")
@@ -272,9 +252,7 @@ def test_rotate_manifests(backup_store, max_manifest_versions):
 
 @pytest.mark.parametrize("dry_run", [True, False])
 @pytest.mark.parametrize("preserve_scratch", [True, False])
-@pytest.mark.parametrize(
-    "manifest", [None, mock.Mock(changed=True), mock.Mock(changed=False)]
-)
+@pytest.mark.parametrize("manifest", [None, mock.Mock(changed=True), mock.Mock(changed=False)])
 def test_do_cleanup(fs_path, backup_store, manifest, dry_run, preserve_scratch):
     with (
         mock.patch("backuppy.stores.backup_store.rmtree") as mock_remove,
@@ -283,24 +261,16 @@ def test_do_cleanup(fs_path, backup_store, manifest, dry_run, preserve_scratch):
         backup_store._manifest = manifest
         backup_store.rotate_manifests = mock.Mock()
         backup_store.do_cleanup(dry_run=dry_run, preserve_scratch=preserve_scratch)
-        assert mock_lock.call_count == int(
-            bool(manifest and manifest.changed and not dry_run)
-        )
-        assert backup_store.rotate_manifests.call_count == int(
-            bool(manifest and manifest.changed and not dry_run)
-        )
+        assert mock_lock.call_count == int(bool(manifest and manifest.changed and not dry_run))
+        assert backup_store.rotate_manifests.call_count == int(bool(manifest and manifest.changed and not dry_run))
         assert mock_remove.call_count == int(bool(manifest and not preserve_scratch))
         assert backup_store._manifest is None
 
 
 @pytest.mark.parametrize("dry_run", [True, False])
 def test_write_copy(backup_store, dry_run, caplog):
-    with mock.patch(
-        "backuppy.stores.backup_store.generate_key_pair", return_value=b"11111"
-    ):
-        entry = backup_store._write_copy(
-            "/foo", "12345678", mock.MagicMock(), False, dry_run
-        )
+    with mock.patch("backuppy.stores.backup_store.generate_key_pair", return_value=b"11111"):
+        entry = backup_store._write_copy("/foo", "12345678", mock.MagicMock(), False, dry_run)
     assert entry.sha == "12345678"
     # no signature computed in dry-run mode
     assert entry.key_pair == b"111112222" if not dry_run else b"11111"
@@ -322,9 +292,7 @@ def test_write_copy_preexisting_sha(backup_store, force_copy, preexisting_entry)
     if not force_copy:
         assert entry.key_pair == preexisting_entry.key_pair
     assert entry.base_sha == (preexisting_entry.base_sha if not force_copy else None)
-    assert entry.base_key_pair == (
-        preexisting_entry.base_key_pair if not force_copy else None
-    )
+    assert entry.base_key_pair == (preexisting_entry.base_key_pair if not force_copy else None)
     assert backup_store.save.call_count == int(force_copy)
 
 
@@ -335,9 +303,7 @@ def test_write_diff(backup_store, current_entry, base_sha, dry_run, caplog):
     if base_sha:
         current_entry.base_key_pair = b"bbbbb3333"
     with (
-        mock.patch(
-            "backuppy.stores.backup_store.generate_key_pair", return_value=b"11111"
-        ),
+        mock.patch("backuppy.stores.backup_store.generate_key_pair", return_value=b"11111"),
         mock.patch("backuppy.stores.backup_store.compute_diff") as mock_compute_diff,
     ):
         mock_compute_diff.return_value = ("12345678", mock.Mock())
@@ -360,9 +326,7 @@ def test_write_diff(backup_store, current_entry, base_sha, dry_run, caplog):
 @pytest.mark.parametrize("dry_run", [True, False])
 def test_write_diff_too_big(backup_store, current_entry, dry_run, caplog):
     with (
-        mock.patch(
-            "backuppy.stores.backup_store.generate_key_pair", return_value=b"11111"
-        ),
+        mock.patch("backuppy.stores.backup_store.generate_key_pair", return_value=b"11111"),
         mock.patch("backuppy.stores.backup_store.compute_diff") as mock_compute_diff,
     ):
         mock_compute_diff.side_effect = DiffTooLargeException
@@ -385,9 +349,7 @@ def test_write_diff_too_big(backup_store, current_entry, dry_run, caplog):
 def test_write_diff_preexisting_sha(backup_store, current_entry, preexisting_entry):
     backup_store.manifest.get_entries_by_sha.return_value = [preexisting_entry]
     with mock.patch("backuppy.stores.backup_store.compute_diff") as mock_compute_diff:
-        entry = backup_store._write_diff(
-            "/foo", preexisting_entry.sha, current_entry, mock.MagicMock(), False
-        )
+        entry = backup_store._write_diff("/foo", preexisting_entry.sha, current_entry, mock.MagicMock(), False)
     assert entry.sha == preexisting_entry.sha
     assert entry.key_pair == preexisting_entry.key_pair
     assert entry.base_sha == preexisting_entry.base_sha
@@ -424,16 +386,12 @@ def test_cleanup_and_exit(backup_store, side_effect):
 
 def test_register_unlocked_store(backup_store):
     with (
-        mock.patch(
-            "backuppy.stores.backup_store._UNLOCKED_STORE", backup_store
-        ) as store,
+        mock.patch("backuppy.stores.backup_store._UNLOCKED_STORE", backup_store) as store,
         mock.patch("backuppy.stores.backup_store.signal.signal") as mock_signal,
     ):
         _register_unlocked_store(backup_store, True, True)
     assert store == backup_store
-    assert mock_signal.call_args_list == [
-        mock.call(sig, mock.ANY) for sig in _SIGNALS_TO_HANDLE
-    ]
+    assert mock_signal.call_args_list == [mock.call(sig, mock.ANY) for sig in _SIGNALS_TO_HANDLE]
 
 
 def test_unregister_store():
@@ -442,6 +400,4 @@ def test_unregister_store():
         mock.patch("backuppy.stores.backup_store.signal.signal") as mock_signal,
     ):
         _unregister_store()
-    assert mock_signal.call_args_list == [
-        mock.call(sig, signal.SIG_DFL) for sig in _SIGNALS_TO_HANDLE
-    ]
+    assert mock_signal.call_args_list == [mock.call(sig, signal.SIG_DFL) for sig in _SIGNALS_TO_HANDLE]

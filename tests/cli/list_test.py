@@ -1,7 +1,7 @@
 import argparse
 import re
-
 from unittest import mock
+
 import pytest
 
 from backuppy.cli.list import _print_details
@@ -83,9 +83,7 @@ def mock_search_results():
         (
             "/path/2/file3",
             [
-                ManifestEntry(
-                    "/path/2/file2", None, None, None, None, None, None, None, 176
-                ),
+                ManifestEntry("/path/2/file2", None, None, None, None, None, None, None, 176),
                 ManifestEntry(
                     "/path/2/file2",
                     "ffffeeee",
@@ -141,7 +139,7 @@ def test_split_root_prefix_not_present():
 )
 def test_print_summary(deleted, changed, mock_search_results, capsys):
     _print_summary("fake_backup2", mock_search_results, deleted, changed)
-    out, err = capsys.readouterr()
+    out, _ = capsys.readouterr()
     if not deleted:
         assert re.search(r"file1\s+3\s+" + format_time(100), out)
         assert re.search(r"file2\s+2\s+" + format_time(105), out)
@@ -157,7 +155,7 @@ def test_print_summary(deleted, changed, mock_search_results, capsys):
 
 def test_print_details(mock_search_results, capsys):
     _print_details("fake_backup2", mock_search_results, False, False, 5)
-    out, err = capsys.readouterr()
+    out, _ = capsys.readouterr()
     assert re.search(r"ab1de\.\.\..*" + format_time(100), out)
     assert re.search(r"ab2de\.\.\..*" + format_time(75), out)
     assert re.search(r"ab3de\.\.\..*" + format_time(20), out)

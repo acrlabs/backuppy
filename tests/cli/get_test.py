@@ -52,9 +52,7 @@ def test_main_two_args():
 def test_main_get_sha(args):
     backup_store = mock.MagicMock(
         manifest=mock.Mock(
-            get_entries_by_sha=mock.Mock(
-                return_value=[mock.Mock(sha="abcdef123", key_pair=b"1234")]
-            ),
+            get_entries_by_sha=mock.Mock(return_value=[mock.Mock(sha="abcdef123", key_pair=b"1234")]),
         )
     )
     with (
@@ -62,15 +60,11 @@ def test_main_get_sha(args):
         mock.patch("backuppy.cli.get._get") as mock_get,
     ):
         main(args)
-        assert mock_get.call_args == mock.call(
-            "abcdef123", b"1234", backup_store, "fetch"
-        )
+        assert mock_get.call_args == mock.call("abcdef123", b"1234", backup_store, "fetch")
 
 
 def test_main_no_entries(args):
-    backup_store = mock.MagicMock(
-        manifest=mock.Mock(get_entries_by_sha=mock.Mock(return_value=[]))
-    )
+    backup_store = mock.MagicMock(manifest=mock.Mock(get_entries_by_sha=mock.Mock(return_value=[])))
     with (
         mock.patch("backuppy.cli.get.get_backup_store", return_value=backup_store),
         mock.patch("backuppy.cli.get._get"),

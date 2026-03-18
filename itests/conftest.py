@@ -38,13 +38,7 @@ def compute_sha(string):
 
 
 def get_latest_manifest():
-    return sorted(
-        [
-            os.path.join(BACKUP_DIR, f)
-            for f in os.listdir(BACKUP_DIR)
-            if f.startswith(MANIFEST_PREFIX)
-        ]
-    )[-1]
+    return sorted([os.path.join(BACKUP_DIR, f) for f in os.listdir(BACKUP_DIR) if f.startswith(MANIFEST_PREFIX)])[-1]
 
 
 @pytest.fixture(autouse=True, scope="session")

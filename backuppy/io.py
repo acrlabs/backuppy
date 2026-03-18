@@ -105,11 +105,7 @@ class IOIter:
 
             # If we're a temporary (in-memory) file and we've exceeded our memory limits,
             # dump the file contents out to disk before continuing
-            if (
-                not self.filename
-                and total_bytes_written >= self.block_size
-                and isinstance(self.fd, io.BytesIO)
-            ):
+            if not self.filename and total_bytes_written >= self.block_size and isinstance(self.fd, io.BytesIO):
                 logger.debug2("overflowed memory limits, caching to disk")  # type: ignore[attr-defined]
                 temp_fd = TemporaryFile(self._mode)
                 self.fd.seek(0)
@@ -136,9 +132,7 @@ class IOIter:
         """
         if self.filename and self._should_check_mtime:
             if not self._enter_mtime:
-                raise BufferError(
-                    f"{self.filename} is missing an mtime; probably it hasn't been opened"
-                )
+                raise BufferError(f"{self.filename} is missing an mtime; probably it hasn't been opened")
             if self.mtime != self._enter_mtime:
                 raise FileChangedException(
                     f"{self.filename} changed while reading; {self.mtime} != {self._enter_mtime}"

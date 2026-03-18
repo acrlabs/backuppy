@@ -34,10 +34,7 @@ def _fix_duplicate_entries(backup_store: BackupStore):
         grouped_entries[(e.abs_file_name, e.sha, e.uid, e.gid, e.mode)].append(e)
 
     for (filename, sha, _, _, _), entries in grouped_entries.items():
-        print(
-            f"ERROR: Found {len(entries)} duplicate entries for ({filename}, {sha}), "
-            "trying to clean up..."
-        )
+        print(f"ERROR: Found {len(entries)} duplicate entries for ({filename}, {sha}), trying to clean up...")
         found_good_entry = False
         for entry in sorted(entries, key=lambda e: e.commit_timestamp, reverse=True):
             if not found_good_entry:
@@ -47,18 +44,12 @@ def _fix_duplicate_entries(backup_store: BackupStore):
                     print(f"Entry backed up at {entry.commit_timestamp} seems good.")
                     continue
                 except Exception as e:
-                    print(
-                        f"ERROR: entry backed up at {entry.commit_timestamp} is corrupt: {str(e)}"
-                    )
+                    print(f"ERROR: entry backed up at {entry.commit_timestamp} is corrupt: {str(e)}")
 
-            if ask_for_confirmation(
-                f"Delete entry backed up at {entry.commit_timestamp}?"
-            ):
+            if ask_for_confirmation(f"Delete entry backed up at {entry.commit_timestamp}?"):
                 backup_store.manifest.delete_entry(entry)
 
-        if not found_good_entry and ask_for_confirmation(
-            f"No valid entries for {filename}; save new version?"
-        ):
+        if not found_good_entry and ask_for_confirmation(f"No valid entries for {filename}; save new version?"):
             logger.warning(f"Saving new version of {filename}")
             if os.path.exists(entry.abs_file_name):
                 backup_store.save_if_new(entry.abs_file_name, force_copy=True)
@@ -69,18 +60,13 @@ def _fix_duplicate_entries(backup_store: BackupStore):
 
 def _fix_shas_with_multiple_key_pairs(backup_store: BackupStore):
     print("Checking for SHAs with multiple key-pairs...")
-    shas_with_multiple_key_pairs = (
-        backup_store.manifest.find_shas_with_multiple_key_pairs()
-    )
+    shas_with_multiple_key_pairs = backup_store.manifest.find_shas_with_multiple_key_pairs()
     grouped_entries = defaultdict(list)
     for e in shas_with_multiple_key_pairs:
         grouped_entries[e.sha].append(e)
 
     for sha, entries in grouped_entries.items():
-        print(
-            f"ERROR: Found {len(entries)} entries for {sha} with different key_pairs, "
-            "trying to clean up..."
-        )
+        print(f"ERROR: Found {len(entries)} entries for {sha} with different key_pairs, trying to clean up...")
         good_key_pair = None
         for entry in entries:
             try:
@@ -89,9 +75,7 @@ def _fix_shas_with_multiple_key_pairs(backup_store: BackupStore):
                 print(f"Entry backed up at {entry.commit_timestamp} seems good.")
                 break
             except Exception as e:
-                print(
-                    f"ERROR: entry backed up at {entry.commit_timestamp} is corrupt: {str(e)}"
-                )
+                print(f"ERROR: entry backed up at {entry.commit_timestamp} is corrupt: {str(e)}")
 
         if good_key_pair is not None and ask_for_confirmation("Fix all entries?"):
             logger.warning(f"Updating all entries with sha {sha}")
@@ -99,17 +83,13 @@ def _fix_shas_with_multiple_key_pairs(backup_store: BackupStore):
                 entry.key_pair = good_key_pair
                 backup_store.manifest.insert_or_update(entry)
 
-        elif good_key_pair is None and ask_for_confirmation(
-            f"No valid entries for {sha}; save new version?"
-        ):
+        elif good_key_pair is None and ask_for_confirmation(f"No valid entries for {sha}; save new version?"):
             logger.warning(f"Saving new version of {entries[0].abs_file_name}")
             backup_store.save_if_new(entries[0].abs_file_name, force_copy=True)
     print("Multiple key-pair check complete!\n")
 
 
-def _verify(
-    entries: list[ManifestEntry], backup_store: BackupStore, show_all: bool
-) -> None:
+def _verify(entries: list[ManifestEntry], backup_store: BackupStore, show_all: bool) -> None:
     print("Beginning verification...")
 
     # Because we might be fixing things as we go, we need to keep track of what
@@ -183,9 +163,7 @@ def add_verify_parser(subparser) -> None:  # pragma: no cover
         nargs="?",
         help="Query string to search the backup set for",
     )
-    subparser.add_argument(
-        "--name", required=True, help="Name of the backup set to examine"
-    )
+    subparser.add_argument("--name", required=True, help="Name of the backup set to examine")
     subparser.add_argument(
         "--sha",
         help="Restore the file corresponding to this SHA",

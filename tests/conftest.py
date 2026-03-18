@@ -43,12 +43,8 @@ def test_config_file():
     }
     with (
         staticconf.testing.PatchConfiguration(config, flatten=False),
-        staticconf.testing.PatchConfiguration(
-            config["backups"]["fake_backup1"], namespace="fake_backup1"
-        ),
-        staticconf.testing.PatchConfiguration(
-            config["backups"]["fake_backup2"], namespace="fake_backup2"
-        ),
+        staticconf.testing.PatchConfiguration(config["backups"]["fake_backup1"], namespace="fake_backup1"),
+        staticconf.testing.PatchConfiguration(config["backups"]["fake_backup2"], namespace="fake_backup2"),
     ):
         yield
 

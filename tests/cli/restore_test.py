@@ -48,10 +48,7 @@ def test_confirm_restore(retval, mock_manifest_entry_list, capsys):
         mock.patch("backuppy.cli.restore.ask_for_confirmation", return_value=retval),
         mock.patch("backuppy.cli.restore.os.path.exists", return_value=retval),
     ):
-        assert (
-            _confirm_restore(mock_manifest_entry_list, "/home/foo/bar", "./foo/bar")
-            == retval
-        )
+        assert _confirm_restore(mock_manifest_entry_list, "/home/foo/bar", "./foo/bar") == retval
 
     out, _ = capsys.readouterr()
     assert ("WARNING" in out) == retval
@@ -70,9 +67,7 @@ def test_main(retval, sha, entries):
     backup_store = mock.MagicMock(
         manifest=mock.Mock(
             get_entries_by_sha=mock.Mock(return_value=entries),
-            search=mock.Mock(
-                return_value=[("/foo", [mock.Mock()]), ("/bar", [mock.Mock()])]
-            ),
+            search=mock.Mock(return_value=[("/foo", [mock.Mock()]), ("/bar", [mock.Mock()])]),
         ),
     )
     with (

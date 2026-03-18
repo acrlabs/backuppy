@@ -96,9 +96,7 @@ def test_m2_crash_before_file_save():
     manifest_conn.row_factory = sqlite3.Row
     manifest_cursor = manifest_conn.cursor()
 
-    manifest_cursor.execute(
-        'select * from manifest where abs_file_name like "%another_file"'
-    )
+    manifest_cursor.execute('select * from manifest where abs_file_name like "%another_file"')
     rows = manifest_cursor.fetchall()
     assert not rows
 
@@ -111,12 +109,7 @@ def test_m2_crash_after_file_save():
     manifest_conn.row_factory = sqlite3.Row
     manifest_cursor = manifest_conn.cursor()
 
-    manifest_cursor.execute(
-        'select * from manifest where abs_file_name like "%another_file"'
-    )
+    manifest_cursor.execute('select * from manifest where abs_file_name like "%another_file"')
     rows = manifest_cursor.fetchall()
     assert len(rows) == 1
-    assert (
-        rows[0]["sha"]
-        == test_file_history[os.path.join(DATA_DIR, "another_file")][0].sha
-    )
+    assert rows[0]["sha"] == test_file_history[os.path.join(DATA_DIR, "another_file")][0].sha

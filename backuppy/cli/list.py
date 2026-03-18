@@ -43,14 +43,10 @@ def _print_summary(
         # deleted, so don't show it.  Similarly, if the changed_only flag is present and the
         # history length is 1, don't show it.  A file has to have a history of at least 2 if
         # it's been deleted so these can be present in the same check.
-        if (not (deleted_only and history[0].sha)) and (
-            not changed_only or len(history) > 1
-        ):
+        if (not (deleted_only and history[0].sha)) and (not changed_only or len(history) > 1):
             contents.append((filename, len(history), deleted_str, backup_time_str))
 
-        if i == len(search_results) - 1 or not search_results[i + 1][0].startswith(
-            root_directory
-        ):
+        if i == len(search_results) - 1 or not search_results[i + 1][0].startswith(root_directory):
             print(f"\n{DASHES}\n{root_directory}\n{DASHES}")
             print(tabulate(contents, headers=SUMMARY_HEADERS))
             if i != len(search_results) - 1:
@@ -66,9 +62,7 @@ def _print_details(
     sha_length: int,
 ) -> None:
     for abs_file_name, history in search_results:
-        if (not (deleted_only and history[0].sha)) and (
-            not changed_only or len(history) > 1
-        ):
+        if (not (deleted_only and history[0].sha)) and (not changed_only or len(history) > 1):
             contents = [
                 (
                     format_sha(h.sha, sha_length),
@@ -100,9 +94,7 @@ def main(args: argparse.Namespace) -> None:
     if not args.details:
         _print_summary(args.name, search_results, args.deleted, args.changed)
     else:
-        _print_details(
-            args.name, search_results, args.deleted, args.changed, args.sha_length
-        )
+        _print_details(args.name, search_results, args.deleted, args.changed, args.sha_length)
 
 
 @subparser("list", "list the contents of a backup set", main)
@@ -114,9 +106,7 @@ def add_list_parser(subparser) -> None:  # pragma: no cover
         nargs="?",
         help="Query string to search the backup set for",
     )
-    subparser.add_argument(
-        "--name", required=True, help="Name of the backup set to examine"
-    )
+    subparser.add_argument("--name", required=True, help="Name of the backup set to examine")
     subparser.add_argument(
         "--after",
         metavar="TIME",
