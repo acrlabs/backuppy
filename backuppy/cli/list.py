@@ -2,6 +2,7 @@ import argparse
 import os
 import stat
 import time
+from collections import defaultdict
 
 import staticconf
 from tabulate import tabulate
@@ -18,12 +19,15 @@ SUMMARY_HEADERS: list[str] = ["filename", "versions", "del?", "last backup time"
 DETAILS_HEADERS: list[str] = ["sha", "uid", "gid", "permissions", "backup time"]
 
 
-def _split_root_prefix(abs_file_name: str, backup_name: str) -> tuple[str, str]:
+def _split_root_prefix(abs_file_name: str, backup_name: str) -> tuple[str | None, str]:
     for directory in staticconf.read_list("directories", namespace=backup_name):  # type: ignore[attr-defined]
-        abs_root = os.path.abspath(directory) + os.path.sep
+        abs_root = os.path.abspath(directory)
+        if not abs_root.endswith(os.path.sep):
+            abs_root += os.path.sep  # If the "directory" is "E:\", we don't want to stick another trailing slash on
         if abs_file_name.startswith(abs_root):
             return abs_root, abs_file_name[len(abs_root) :]
-    raise ValueError(f"{abs_file_name} does not start with any directory prefix")
+
+    return None, abs_file_name
 
 
 def _print_summary(
@@ -32,10 +36,13 @@ def _print_summary(
     deleted_only: bool,
     changed_only: bool,
 ) -> None:
-    contents: list[tuple[str, int, str, str]] = []
+    contents: dict[str, list[tuple[str, int, str, str]]] = defaultdict(list)
 
     for i, (abs_file_name, history) in enumerate(search_results):
         root_directory, filename = _split_root_prefix(search_results[i][0], backup_name)
+        if root_directory is None:
+            root_directory = "UNKNOWN"
+
         backup_time_str = format_time(history[0].commit_timestamp)
         deleted_str = "" if history[0].sha else "y"
 
@@ -44,13 +51,12 @@ def _print_summary(
         # history length is 1, don't show it.  A file has to have a history of at least 2 if
         # it's been deleted so these can be present in the same check.
         if (not (deleted_only and history[0].sha)) and (not changed_only or len(history) > 1):
-            contents.append((filename, len(history), deleted_str, backup_time_str))
+            contents[root_directory].append((filename, len(history), deleted_str, backup_time_str))
 
-        if i == len(search_results) - 1 or not search_results[i + 1][0].startswith(root_directory):
-            print(f"\n{DASHES}\n{root_directory}\n{DASHES}")
-            print(tabulate(contents, headers=SUMMARY_HEADERS))
-            if i != len(search_results) - 1:
-                contents = []
+    for root_directory, entries in contents.items():
+        print(f"\n{DASHES}\n{root_directory}\n{DASHES}")
+        print(tabulate(entries, headers=SUMMARY_HEADERS))
+
     print()
 
 
