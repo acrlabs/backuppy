@@ -3,11 +3,10 @@ import shutil
 
 import colorlog
 
-from backuppy.io import io_copy
 from backuppy.io import IOIter
+from backuppy.io import io_copy
 from backuppy.stores.backup_store import BackupStore
 from backuppy.util import path_join
-
 
 logger = colorlog.getLogger(__name__)
 
@@ -39,7 +38,6 @@ class LocalBackupStore(BackupStore):
 
         # windows does not allow deleting an open FD, so we copy here and delete the original later
         shutil.copy2(src.filename, abs_backup_path)
-        return  # test_f2_lbs_atomicity_2
 
     def _load(self, path: str, output_file: IOIter) -> IOIter:
         abs_backup_path = path_join(self.backup_location, path)

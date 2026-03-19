@@ -13,14 +13,14 @@ from backuppy.cli.restore import main as restore
 from backuppy.io import IOIter
 from backuppy.util import file_walker
 from backuppy.util import path_join
-from itests.conftest import _TestFileData
 from itests.conftest import BACKUP_ARGS
 from itests.conftest import BACKUP_DIR
+from itests.conftest import ITEST_CONFIG
+from itests.conftest import RESTORE_DIR
+from itests.conftest import _TestFileData
 from itests.conftest import clean_up_temp_directories
 from itests.conftest import get_latest_manifest
-from itests.conftest import ITEST_CONFIG
 from itests.conftest import itest_setup
-from itests.conftest import RESTORE_DIR
 
 test_file_history = dict()  # type: ignore
 RESTORE_ARGS = argparse.Namespace(

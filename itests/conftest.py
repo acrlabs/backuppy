@@ -7,8 +7,8 @@ import traceback
 from contextlib import contextmanager
 from hashlib import sha256
 from shutil import rmtree
-
 from unittest import mock
+
 import pytest
 
 from backuppy.config import setup_config
@@ -114,7 +114,7 @@ def make_trace_func(search_string, side_effect):
 
         elif event == "line":
             line = traceback.extract_stack(frame, limit=1)[0].line
-            m = re.search(f"#\s+{search_string}", line)
+            m = re.search(rf"#\s+{search_string}", line)
             if m:
                 # Note that if side_effect() raises an Exception, the trace function will
                 # no longer function, because this must return a reference to trace_func and

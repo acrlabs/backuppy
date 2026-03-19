@@ -1,7 +1,7 @@
 import os
 import signal
-
 from unittest import mock
+
 import pytest
 
 from backuppy.stores.backup_store import BackupStore

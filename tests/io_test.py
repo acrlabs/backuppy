@@ -2,15 +2,15 @@ import os
 import time
 from hashlib import sha256
 from tempfile import TemporaryFile
-
 from unittest import mock
+
 import pytest
 
 from backuppy.exceptions import DoubleBufferError
 from backuppy.exceptions import FileChangedException
+from backuppy.io import IOIter
 from backuppy.io import compute_sha
 from backuppy.io import io_copy
-from backuppy.io import IOIter
 
 
 @pytest.fixture

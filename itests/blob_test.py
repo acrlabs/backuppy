@@ -33,7 +33,7 @@ def generate_data():
     "orig_data,new_data",
     [
         (
-            b"yvglcwpherjilzaivozswxogbicmycqlirmlohuggjcilznfbqemryzausgdvnmtvseatahalpgznorldtrkkgybvuxcianqzclt",  # noqa
+            b"yvglcwpherjilzaivozswxogbicmycqlirmlohuggjcilznfbqemryzausgdvnmtvseatahalpgznorldtrkkgybvuxcianqzclt",
             b"ferjilzaiicmljghprmlsogvrzbqemryzaudvnmtvseatxasfbvaeahalpgznorqldtrkkgybqxlcian",
         ),
     ]

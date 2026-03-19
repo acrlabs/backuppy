@@ -7,14 +7,14 @@ import pytest
 
 from backuppy.cli.backup import main as backup
 from backuppy.util import sha_to_path
-from itests.conftest import _TestFileData
 from itests.conftest import BACKUP_DIR
-from itests.conftest import clean_up_temp_directories
 from itests.conftest import DATA_DIRS
-from itests.conftest import get_latest_manifest
 from itests.conftest import ITEST_CONFIG
-from itests.conftest import itest_setup
 from itests.conftest import ItestException
+from itests.conftest import _TestFileData
+from itests.conftest import clean_up_temp_directories
+from itests.conftest import get_latest_manifest
+from itests.conftest import itest_setup
 from itests.conftest import make_trace_func
 
 test_file_history = dict()  # type: ignore

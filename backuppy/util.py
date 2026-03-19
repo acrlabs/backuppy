@@ -1,12 +1,12 @@
 import os
 import re
 import sys
-from datetime import datetime
-from random import shuffle
-from tempfile import gettempdir
 from collections.abc import Callable
 from collections.abc import Generator
+from datetime import datetime
+from random import shuffle
 from re import Pattern
+from tempfile import gettempdir
 
 import colorlog
 import dateparser

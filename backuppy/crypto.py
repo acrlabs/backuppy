@@ -1,10 +1,10 @@
 import os
 import zlib
+from collections.abc import Callable
+from collections.abc import Generator
 from itertools import chain
 from itertools import repeat
-from collections.abc import Callable
 from typing import cast
-from collections.abc import Generator
 
 import colorlog
 from cryptography.exceptions import InvalidSignature

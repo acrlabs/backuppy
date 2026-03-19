@@ -5,7 +5,6 @@ from backuppy.stores.backup_store import BackupStore
 from backuppy.stores.local_backup_store import LocalBackupStore
 from backuppy.stores.s3_backup_store import S3BackupStore
 
-
 __all__ = [
     "LocalBackupStore",
 ]

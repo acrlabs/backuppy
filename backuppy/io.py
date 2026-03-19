@@ -1,11 +1,11 @@
-import _hashlib  # for typing
 import io
 import os
+from collections.abc import Generator
 from hashlib import sha256
 from tempfile import TemporaryFile
-from collections.abc import Generator
 from typing import IO
 
+import _hashlib  # for typing
 import colorlog
 
 from backuppy.exceptions import DoubleBufferError

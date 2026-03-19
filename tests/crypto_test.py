@@ -1,6 +1,6 @@
 import zlib
-
 from unittest import mock
+
 import pytest
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives.asymmetric.rsa import generate_private_key
@@ -12,11 +12,11 @@ from cryptography.hazmat.primitives.hmac import HMAC
 
 from backuppy.crypto import AES_BLOCK_SIZE
 from backuppy.crypto import AES_KEY_SIZE
+from backuppy.crypto import RSA_KEY_SIZE_BITS
 from backuppy.crypto import compress_and_encrypt
 from backuppy.crypto import decrypt_and_unpack
 from backuppy.crypto import decrypt_and_verify
 from backuppy.crypto import encrypt_and_sign
-from backuppy.crypto import RSA_KEY_SIZE_BITS
 from backuppy.exceptions import BackupCorruptedError
 from tests.conftest import count_matching_log_lines
 

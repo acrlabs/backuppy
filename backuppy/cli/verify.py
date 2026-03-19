@@ -8,8 +8,8 @@ import staticconf
 from backuppy.args import add_preserve_scratch_arg
 from backuppy.args import subparser
 from backuppy.exceptions import MismatchedSHAError
-from backuppy.io import compute_sha
 from backuppy.io import IOIter
+from backuppy.io import compute_sha
 from backuppy.manifest import ManifestEntry
 from backuppy.stores import get_backup_store
 from backuppy.stores.backup_store import BackupStore
@@ -44,7 +44,7 @@ def _fix_duplicate_entries(backup_store: BackupStore):
                     print(f"Entry backed up at {entry.commit_timestamp} seems good.")
                     continue
                 except Exception as e:
-                    print(f"ERROR: entry backed up at {entry.commit_timestamp} is corrupt: {str(e)}")
+                    print(f"ERROR: entry backed up at {entry.commit_timestamp} is corrupt: {e!s}")
 
             if ask_for_confirmation(f"Delete entry backed up at {entry.commit_timestamp}?"):
                 backup_store.manifest.delete_entry(entry)
@@ -75,7 +75,7 @@ def _fix_shas_with_multiple_key_pairs(backup_store: BackupStore):
                 print(f"Entry backed up at {entry.commit_timestamp} seems good.")
                 break
             except Exception as e:
-                print(f"ERROR: entry backed up at {entry.commit_timestamp} is corrupt: {str(e)}")
+                print(f"ERROR: entry backed up at {entry.commit_timestamp} is corrupt: {e!s}")
 
         if good_key_pair is not None and ask_for_confirmation("Fix all entries?"):
             logger.warning(f"Updating all entries with sha {sha}")
@@ -108,7 +108,7 @@ def _verify(entries: list[ManifestEntry], backup_store: BackupStore, show_all: b
             verified = True
             check_str += " OK!"
         except Exception as e:
-            check_str += f" ERROR: {str(e)}"
+            check_str += f" ERROR: {e!s}"
 
         if not verified or show_all:
             print(check_str)

@@ -1,7 +1,7 @@
 import argparse
 import sqlite3
-
 from unittest import mock
+
 import pytest
 
 from backuppy.cli.put import main

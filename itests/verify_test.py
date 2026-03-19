@@ -2,16 +2,15 @@ import argparse
 from time import sleep
 
 import pytest
-import staticconf
 import staticconf.testing
 
 from backuppy.cli.backup import main as backup
 from backuppy.cli.verify import main as verify
 from backuppy.stores import get_backup_store
-from itests.conftest import _TestFileData
 from itests.conftest import BACKUP_ARGS
-from itests.conftest import clean_up_temp_directories
 from itests.conftest import ITEST_CONFIG
+from itests.conftest import _TestFileData
+from itests.conftest import clean_up_temp_directories
 from itests.conftest import itest_setup
 
 test_file_history = dict()  # type: ignore

@@ -3,7 +3,6 @@ from pathlib import Path
 
 from backuppy.util import file_walker
 
-
 # def test_ask_for_confirmation():
 
 

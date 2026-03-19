@@ -39,7 +39,7 @@ def _scan_directory(
         except Exception as e:
             # We never want to hard-fail a backup just because one file crashed; we'd rather back up
             # as much as we can, and log the failures for further investigation
-            logger.exception(f"There was a problem backing up {abs_file_name}: {str(e)}; skipping")
+            logger.exception(f"There was a problem backing up {abs_file_name}: {e!s}; skipping")
             continue
 
     # Mark all files that weren't touched in the above loop as "deleted"

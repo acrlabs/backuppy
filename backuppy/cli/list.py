@@ -51,7 +51,7 @@ def _print_summary(
             print(tabulate(contents, headers=SUMMARY_HEADERS))
             if i != len(search_results) - 1:
                 contents = []
-    print("")
+    print()
 
 
 def _print_details(
@@ -75,7 +75,7 @@ def _print_details(
             ]
             print(f"\n{DASHES}\n{abs_file_name}\n{DASHES}")
             print(tabulate(contents, headers=DETAILS_HEADERS))
-    print("")
+    print()
 
 
 def main(args: argparse.Namespace) -> None:

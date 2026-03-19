@@ -1,7 +1,7 @@
 import argparse
 from contextlib import ExitStack
-
 from unittest import mock
+
 import pytest
 
 from backuppy.cli.restore import _confirm_restore

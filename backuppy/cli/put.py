@@ -4,8 +4,8 @@ import staticconf
 
 from backuppy.args import add_name_arg
 from backuppy.args import subparser
-from backuppy.manifest import lock_manifest
 from backuppy.manifest import Manifest
+from backuppy.manifest import lock_manifest
 from backuppy.stores import get_backup_store
 
 

@@ -1,8 +1,8 @@
-import shutil
 import os
+import shutil
 from io import BytesIO
-
 from unittest import mock
+
 import pytest
 import staticconf.testing
 

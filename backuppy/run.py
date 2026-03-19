@@ -31,10 +31,10 @@ def setup_logging(
     global logger
     if not len(logger.handlers):
         logging.addLevelName(DEBUG2, "DEBUG2")
-        setattr(logging, "DEBUG2", DEBUG2)
+        logging.DEBUG2 = DEBUG2  # type: ignore
         log_fn, root_log_fn = _log_fns_for_level(DEBUG2)
-        setattr(logging.getLoggerClass(), "debug2", log_fn)
-        setattr(logging, "debug2", root_log_fn)
+        logging.getLoggerClass().debug2 = log_fn  # type: ignore
+        logging.debug2 = root_log_fn  # type: ignore
 
         handler = colorlog.StreamHandler()
         handler.setFormatter(
@@ -59,8 +59,7 @@ def setup_logging(
                 logging.Formatter("%(asctime)s %(levelname)s %(name)s(%(lineno)d) -- %(message)s")
             )
 
-            if log_file_level < min_log_level:
-                min_log_level = log_file_level
+            min_log_level = min(min_log_level, log_file_level)
             logging.getLogger().addHandler(log_file_handler)
 
         logging.getLogger().setLevel(min_log_level)

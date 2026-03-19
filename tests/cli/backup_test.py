@@ -1,7 +1,7 @@
 import argparse
 import re
-
 from unittest import mock
+
 import pytest
 
 from backuppy.cli.backup import _scan_directory
